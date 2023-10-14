@@ -9,6 +9,7 @@ pub enum TokenKind {
 #[derive(Debug, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,
+    pub pos: usize
 }
 
 impl Token {
@@ -64,17 +65,20 @@ impl Lexer {
 
     /// Lex next token
     fn next_token(&mut self) -> Option<Token> {
+        let pos = self.cursor;
         match self.current()? {
             '(' => {
                 self.consume();
                 Some(Token {
                     kind: TokenKind::LeftParen,
+                    pos,
                 })
             }
             ')' => {
                 self.consume();
                 Some(Token {
                     kind: TokenKind::RightParen,
+                    pos,
                 })
             }
             _ => {
@@ -83,11 +87,12 @@ impl Lexer {
                     let path = self.consume_path();
                     Some(Token {
                         kind: TokenKind::Path(path),
+                        pos,
                     })
 
                 // Lex text as message
                 } else {
-                    let start_index = self.cursor;
+                    let start_index = pos;
                     let end_index;
 
                     // Stop at ')' or end of text.
@@ -111,6 +116,7 @@ impl Lexer {
                     let message = String::from_iter(bytes);
                     Some(Token {
                         kind: TokenKind::Message(message),
+                        pos,
                     })
                 }
             }
@@ -190,28 +196,36 @@ mod tests {
             lexed_tokens,
             vec![
                 Token {
-                    kind: TokenKind::LeftParen
+                    kind: TokenKind::LeftParen,
+                    pos: 0,
                 },
                 Token {
-                    kind: TokenKind::LeftParen
+                    kind: TokenKind::LeftParen,
+                    pos: 1,
                 },
                 Token {
-                    kind: TokenKind::LeftParen
+                    kind: TokenKind::LeftParen,
+                    pos: 2,
                 },
                 Token {
-                    kind: TokenKind::RightParen
+                    kind: TokenKind::RightParen,
+                    pos: 3,
                 },
                 Token {
-                    kind: TokenKind::RightParen
+                    kind: TokenKind::RightParen,
+                    pos: 4,
                 },
                 Token {
-                    kind: TokenKind::LeftParen
+                    kind: TokenKind::LeftParen,
+                    pos: 5,
                 },
                 Token {
-                    kind: TokenKind::RightParen
+                    kind: TokenKind::RightParen,
+                    pos: 6,
                 },
                 Token {
-                    kind: TokenKind::RightParen
+                    kind: TokenKind::RightParen,
+                    pos: 7,
                 },
             ]
         )
@@ -225,13 +239,16 @@ mod tests {
             lexed_tokens,
             vec![
                 Token {
-                    kind: TokenKind::LeftParen
+                    kind: TokenKind::LeftParen,
+                    pos: 0,
                 },
                 Token {
-                    kind: TokenKind::Path("./path/to/interesting/place.awesome".to_string())
+                    kind: TokenKind::Path("./path/to/interesting/place.awesome".to_string()),
+                    pos: 1,
                 },
                 Token {
-                    kind: TokenKind::RightParen
+                    kind: TokenKind::RightParen,
+                    pos: 35,
                 },
             ]
         )
