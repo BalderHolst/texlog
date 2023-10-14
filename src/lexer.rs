@@ -158,19 +158,26 @@ impl Lexer {
 
     /// Consume a path
     fn consume_path(&mut self) -> String {
-        let start_index = self.cursor;
-        if self.current() == Some(&'.') {
-            self.consume();
+        let mut chars = vec![];
+        while self.at_path_start() {
+            chars.push(self.consume().unwrap().clone());
         };
 
-        while self.at_path_char() {
-            self.consume();
+        loop {
+            match self.current() {
+                Some(&'(') => break,
+                Some(&')') => break,
+                Some(&'\n') => {
+                    self.consume(); // Ignore newlines
+                }, 
+                Some(c) => {
+                    chars.push(c.clone());
+                    self.consume();
+                },
+                None => break,
+            }
         }
-
-        let end_index = self.cursor;
-
-        let bytes = self.chars[start_index..end_index].iter();
-        String::from_iter(bytes)
+        String::from_iter(chars)
     }
 }
 
@@ -248,7 +255,7 @@ mod tests {
                 },
                 Token {
                     kind: TokenKind::RightParen,
-                    pos: 35,
+                    pos: 36,
                 },
             ]
         )
