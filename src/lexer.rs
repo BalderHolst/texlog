@@ -28,9 +28,6 @@ struct Lexer {
 
     // The index of the current character getting lexed
     cursor: usize,
-
-    /// Is true when the path for a part of the log is found.
-    got_path: bool,
 }
 
 impl Lexer {
@@ -39,7 +36,6 @@ impl Lexer {
         Self {
             chars: source.chars().collect(),
             cursor: 0,
-            got_path: false,
         }
     }
 
@@ -70,7 +66,6 @@ impl Lexer {
     fn next_token(&mut self) -> Option<Token> {
         match self.current()? {
             '(' => {
-                self.got_path = false;
                 self.consume();
                 Some(Token {
                     kind: TokenKind::LeftParen,
@@ -84,9 +79,8 @@ impl Lexer {
             }
             _ => {
                 // Check of we need to lex a path
-                if !self.got_path && self.at_path_start() {
+                if self.at_path_start() {
                     let path = self.consume_path();
-                    self.got_path = true;
                     Some(Token {
                         kind: TokenKind::Path(path),
                     })
@@ -100,7 +94,7 @@ impl Lexer {
                     loop {
                         match self.current() {
                             Some(c) => {
-                                if c == &')' {
+                                if matches!(c, &')' | &'(') || self.at_path_start() {
                                     end_index = self.cursor;
                                     break;
                                 }
