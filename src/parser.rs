@@ -7,7 +7,11 @@ use crate::lexer::{self, Token, TokenKind};
 
 fn parse_log_file(file_path: PathBuf) -> Log {
     let text = fs::read_to_string(file_path).unwrap();
-    let tokens = lexer::tokenize(text.as_str());
+    parse_source(&text)
+}
+
+fn parse_source(source: &String) -> Log {
+    let tokens = lexer::tokenize(source.as_str());
     let mut parser = Parser::new(tokens);
     parser.parse()
 }
@@ -21,10 +25,27 @@ struct Node {
     messages: String,
 
     /// Position of the node in log file
-    pos: Option<usize>,
+    pos: usize,
 
     /// The other files that this one calls
     calls: Vec<Node>,
+}
+
+impl Node {
+    pub fn row_col(&self, source: &String) -> (usize, usize) {
+        let mut row = 1;
+        let mut last_newline = 0;
+        for (i, c) in source[..self.pos].chars().enumerate() {
+            match c {
+                '\n' => {
+                    row += 1;
+                    last_newline = i;
+                },
+                _ => {},
+            }
+        }
+        (row, self.pos - last_newline)
+    }
 }
 
 struct Parser {
@@ -56,11 +77,14 @@ impl Parser {
     /// Get token under cursor and increment cursor
     fn consume(&mut self) -> Option<&Token> {
         let token = self.tokens.get(self.cursor);
+        println!("{:?}", token);
         self.cursor += 1;
         token
     }
 
     fn parse_node(&mut self) -> Node {
+        let pos = self.current().unwrap().pos;
+
         assert!(self
             .consume()
             .expect("There should always be a token here to call this function.")
@@ -71,20 +95,40 @@ impl Parser {
             _ => "no path...".to_string()
         };
 
-        let pos = None;
+        println!("Starting node {file}");
 
         let mut messages: String = "".to_string();
         let mut calls = vec![];
 
+        let mut unclosed_text_parens: usize = 0;
+
         loop {
             match &self.current().unwrap().kind {
-                TokenKind::LeftParen => calls.push(self.parse_node()),
+                TokenKind::LeftParen => {
+                    if let TokenKind::Path(_) = self.peak(1).kind {
+                        calls.push(self.parse_node())
+                    }
+                    else {
+                        messages += "(";
+                        unclosed_text_parens += 1;
+                        self.consume();
+                    }
+                },
                 TokenKind::RightParen => {
-                    return Node {
-                        file,
-                        messages,
-                        pos,
-                        calls,
+                    if unclosed_text_parens > 0 {
+                        messages += ")";
+                        unclosed_text_parens -= 1;
+                        self.consume();
+                    }
+                    else {
+                        println!("Ending node {file}");
+                        self.consume();
+                        return Node {
+                            file,
+                            messages,
+                            pos,
+                            calls,
+                        }
                     }
                 }
                 TokenKind::Path(p) => {
@@ -154,17 +198,20 @@ trait Visitor {
 struct Printer {
     /// Debth in tree
     level: usize,
+
+    /// Source text
+    text: String,
 }
 
 impl Printer {
-    fn new() -> Self {
-        Self { level: 0 }
+    fn new(text: String) -> Self {
+        Self { text, level: 0 }
     }
 }
 
 impl Visitor for Printer {
     fn visit_node(&mut self, node: &Node) {
-        println!("{}{:?}", "  ".repeat(self.level), node.file);
+        println!("{}{:?} at {:?} (len: {})", "  ".repeat(self.level), node.file, node.row_col(&self.text), node.messages.len());
         self.level += 1;
         self.do_visit_node(node);
         self.level -= 1;
@@ -177,8 +224,9 @@ mod tests {
 
     #[test]
     fn print_tree() {
-        let log = parse_log_file(PathBuf::from("./test/main.log"));
-        let mut printer = Printer::new();
+        let source = fs::read_to_string("./test/main.log").unwrap();
+        let log = parse_source(&source);
+        let mut printer = Printer::new(source);
         printer.visit_node(&log.root_node);
     }
 }

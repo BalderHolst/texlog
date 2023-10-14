@@ -167,9 +167,14 @@ impl Lexer {
             match self.current() {
                 Some(&'(') => break,
                 Some(&')') => break,
-                Some(&'\n') => {
-                    self.consume(); // Ignore newlines
-                }, 
+                Some(&'<') => break,
+                Some(&'>') => break,
+                Some(&'\n') if self.peak(1) != Some(&'\n') => { // TODO: we do not always want to ignore the newline, but i don't
+                                 // know how to determine when. A jank solution would be to check
+                                 // if the file exists.
+                    self.consume();
+                },
+                Some(c) if c.is_whitespace() => break,
                 Some(c) => {
                     chars.push(c.clone());
                     self.consume();
