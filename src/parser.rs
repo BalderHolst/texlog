@@ -1,14 +1,14 @@
 use std::{fs, path::PathBuf};
 
-use crate::lexer::{self, Token, TokenKind};
+use crate::{lexer::{self, Token, TokenKind}, text::SourceText};
 
 fn parse_log_file(file_path: PathBuf) -> Log {
     let text = fs::read_to_string(file_path).unwrap();
     parse_source(&text)
 }
 
-fn parse_source(source: &String) -> Log {
-    let tokens = lexer::tokenize(source.as_str());
+fn parse_source(source: &str) -> Log {
+    let tokens = lexer::tokenize(source);
     let mut parser = Parser::new(tokens);
     parser.parse()
 }
@@ -29,31 +29,14 @@ struct Node {
     calls: Vec<Node>,
 }
 
-impl Node {
-    pub fn row_col(&self, source: &String) -> (usize, usize) {
-        let mut row = 1;
-        let mut last_newline = 0;
-        for (i, c) in source[..self.start_pos].chars().enumerate() {
-            match c {
-                '\n' => {
-                    row += 1;
-                    last_newline = i;
-                }
-                _ => {}
-            }
-        }
-        (row, self.start_pos - last_newline)
-    }
-}
-
-struct Parser {
+pub struct Parser {
     cursor: usize,
     tokens: Vec<Token>,
 }
 
 impl Parser {
     /// Create a new parser from a vec of tokens
-    fn new(tokens: Vec<Token>) -> Self {
+    pub fn new(tokens: Vec<Token>) -> Self {
         Self { cursor: 0, tokens }
     }
 
@@ -153,7 +136,7 @@ impl Parser {
         }
     }
 
-    fn parse(&mut self) -> Log {
+    pub fn parse(&mut self) -> Log {
         let mut info = "".to_string();
         println!("info...");
         loop {
@@ -183,7 +166,7 @@ impl Parser {
     }
 }
 
-struct Log {
+pub struct Log {
     info: String,
     root_node: Node,
 }
@@ -200,16 +183,16 @@ trait Visitor {
     }
 }
 
-struct Printer {
+pub struct Printer {
     /// Debth in tree
     level: usize,
 
     /// Source text
-    text: String,
+    text: SourceText,
 }
 
 impl Printer {
-    fn new(text: String) -> Self {
+    pub fn new(text: SourceText) -> Self {
         Self { text, level: 0 }
     }
 }
@@ -217,11 +200,11 @@ impl Printer {
 impl Visitor for Printer {
     fn visit_node(&mut self, node: &Node) {
         println!(
-            "{}{:?} at {:?} (len: {})",
+            "{}{:?} at {:?} - {:?}",
             "  ".repeat(self.level),
             node.file,
-            node.row_col(&self.text),
-            node.messages.len()
+            self.text.row_col(node.start_pos),
+            self.text.row_col(node.end_pos),
         );
         self.level += 1;
         self.do_visit_node(node);
@@ -235,8 +218,8 @@ mod tests {
 
     #[test]
     fn print_tree() {
-        let source = fs::read_to_string("./test/main.log").unwrap();
-        let log = parse_source(&source);
+        let source = SourceText::from_file("./test/main.log").unwrap();
+        let log = parse_source(source.as_str());
         let mut printer = Printer::new(source);
         printer.visit_node(&log.root_node);
     }
