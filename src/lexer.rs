@@ -138,24 +138,6 @@ impl Lexer {
         }
     }
 
-    /// Returns `true` when cursor is at the start of a word
-    fn at_word_char(&self) -> bool {
-        match self.current() {
-            Some(c) => c.is_alphabetic(),
-            None => false,
-        }
-    }
-
-    /// Return `true` when cursor is at character that could be a part of a path
-    fn at_path_char(&self) -> bool {
-        self.at_word_char()
-            || match self.current() {
-                Some(&'/') => true,
-                Some(&'.') => true,
-                _ => false,
-            }
-    }
-
     /// Consume a path
     fn consume_path(&mut self) -> String {
         let mut chars = vec![];
