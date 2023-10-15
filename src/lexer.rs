@@ -9,7 +9,7 @@ pub enum TokenKind {
 #[derive(Debug, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,
-    pub pos: usize
+    pub pos: usize,
 }
 
 impl Token {
@@ -161,7 +161,7 @@ impl Lexer {
         let mut chars = vec![];
         while self.at_path_start() {
             chars.push(self.consume().unwrap().clone());
-        };
+        }
 
         loop {
             match self.current() {
@@ -169,16 +169,43 @@ impl Lexer {
                 Some(&')') => break,
                 Some(&'<') => break,
                 Some(&'>') => break,
-                Some(&'\n') if self.peak(1) != Some(&'\n') => { // TODO: we do not always want to ignore the newline, but i don't
-                                 // know how to determine when. A jank solution would be to check
-                                 // if the file exists.
+                Some(&'[') => break,
+                Some(&']') => break,
+                Some(&'\\') => break,
+
+                // TODO: This is an awful solution
+                // Break if any of these strings are next in the path. Of course,
+                // this means that paths that include these strings will be cut and
+                // reported incorrectly, but i cannot figure out a way to determine
+                // if the paths continue on the next line.
+                Some(_)
+                    if &[
+                        "\nDictionary:",
+                        "\nPackage:",
+                        "\nFile:",
+                        "\nLaTeX:",
+                        "\nDocument Class:",
+                    ]
+                    .map(|s| {
+                        self.chars[self.cursor..]
+                            .starts_with(s.chars().collect::<Vec<char>>().as_slice())
+                    })
+                    .iter()
+                    .filter(|e| **e)
+                    .count()
+                        > &0 =>
+                {
+                    break
+                }
+                Some(&'\n') if self.peak(1) != Some(&'\n') => {
                     self.consume();
-                },
+                }
+
                 Some(c) if c.is_whitespace() => break,
                 Some(c) => {
                     chars.push(c.clone());
                     self.consume();
-                },
+                }
                 None => break,
             }
         }

@@ -1,6 +1,9 @@
 use std::{fs, path::PathBuf};
 
-use crate::{lexer::{self, Token, TokenKind}, text::SourceText};
+use crate::{
+    lexer::{self, Token, TokenKind},
+    text::SourceText,
+};
 
 fn parse_log_file(file_path: PathBuf) -> Log {
     let text = fs::read_to_string(file_path).unwrap();
