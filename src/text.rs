@@ -38,6 +38,9 @@ impl SourceText {
     }
 
     pub fn index(&self, row: usize, col: usize) -> usize {
+        let row = usize::max(1, row);
+        let col = usize::max(1, col);
+
         let mut index = 0;
         let mut chars = self.text.chars();
 

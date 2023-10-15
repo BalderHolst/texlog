@@ -2,7 +2,7 @@ use std::{fs, path::PathBuf};
 
 use crate::{
     lexer::{self, Token, TokenKind},
-    text::SourceText,
+    text::SourceText, log::Log,
 };
 
 fn parse_log_file(file_path: PathBuf) -> Log {
@@ -17,19 +17,19 @@ fn parse_source(source: &str) -> Log {
 }
 
 #[derive(Debug)]
-struct Node {
+pub(crate) struct Node {
     /// Path to file that this node represents
-    file: String,
+    pub(crate) file: String,
 
     /// Log messages for this node
-    messages: String,
+    pub(crate) messages: String,
 
     /// Position of the node in log file
-    start_pos: usize,
-    end_pos: usize,
+    pub(crate) start_pos: usize,
+    pub(crate) end_pos: usize,
 
     /// The other files that this one calls
-    calls: Vec<Node>,
+    pub(crate) calls: Vec<Node>,
 }
 
 pub struct Parser {
@@ -167,38 +167,6 @@ impl Parser {
     }
 }
 
-pub struct Log {
-    info: String,
-    root_node: Node,
-}
-
-impl Log {
-
-    /// Returns the call stack at an index in the log file. Returns `None` if the index is outside
-    /// root node.
-    pub fn trace_at(&self, index: usize) -> Vec<PathBuf> {
-        let mut trace = self.trace_from_node(index, &self.root_node);
-        trace.reverse();
-        trace
-    }
-
-    fn trace_from_node(&self, index: usize, root_node: &Node) -> Vec<PathBuf> {
-        let file = PathBuf::from(&root_node.file);
-        for sub_node in &root_node.calls {
-            if sub_node.start_pos <= index && index <= sub_node.end_pos {
-                let mut trace = self.trace_from_node(index, sub_node);
-                trace.push(file);
-                return trace
-            }
-        }
-
-        // This is the leaf node
-        let mut trace = Vec::with_capacity(20);
-        trace.push(file);
-        return trace
-    }
-}
-
 trait Visitor {
     fn visit_node(&mut self, node: &Node) {
         self.do_visit_node(node)
@@ -244,20 +212,13 @@ impl Visitor for Printer {
 mod tests {
     use super::*;
 
-    // #[test]
-    // fn print_tree() {
-    //     let source = SourceText::from_file("./test/main.log").unwrap();
-    //     let log = parse_source(source.as_str());
-    //     let mut printer = Printer::new(source);
-    //     printer.visit_node(&log.root_node);
-    // }
-
     #[test]
     fn trace() {
         let source = SourceText::from_file("./test/main.log").unwrap();
         let log = parse_source(source.as_str());
-        let trace = log.trace_at(1500);
-        dbg!(trace);
+        let trace = log.trace_at(source.index(7, 1));
+        dbg!(&trace);
+        assert_eq!(trace, vec![PathBuf::from("./main.tex")])
     }
 
 }
