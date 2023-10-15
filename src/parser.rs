@@ -174,6 +174,33 @@ pub struct Log {
     root_node: Node,
 }
 
+impl Log {
+
+    /// Returns the call stack at an index in the log file. Returns `None` if the index is outside
+    /// root node.
+    pub fn trace_at(&self, index: usize) -> Vec<PathBuf> {
+        let mut trace = self.trace_from_node(index, &self.root_node);
+        trace.reverse();
+        trace
+    }
+
+    fn trace_from_node(&self, index: usize, root_node: &Node) -> Vec<PathBuf> {
+        let file = PathBuf::from(&root_node.file);
+        for sub_node in &root_node.calls {
+            if sub_node.start_pos <= index && index <= sub_node.end_pos {
+                let mut trace = self.trace_from_node(index, sub_node);
+                trace.push(file);
+                return trace
+            }
+        }
+
+        // This is the leaf node
+        let mut trace = Vec::with_capacity(20);
+        trace.push(file);
+        return trace
+    }
+}
+
 trait Visitor {
     fn visit_node(&mut self, node: &Node) {
         self.do_visit_node(node)
@@ -219,11 +246,20 @@ impl Visitor for Printer {
 mod tests {
     use super::*;
 
+    // #[test]
+    // fn print_tree() {
+    //     let source = SourceText::from_file("./test/main.log").unwrap();
+    //     let log = parse_source(source.as_str());
+    //     let mut printer = Printer::new(source);
+    //     printer.visit_node(&log.root_node);
+    // }
+
     #[test]
-    fn print_tree() {
+    fn trace() {
         let source = SourceText::from_file("./test/main.log").unwrap();
         let log = parse_source(source.as_str());
-        let mut printer = Printer::new(source);
-        printer.visit_node(&log.root_node);
+        let trace = log.trace_at(1500);
+        dbg!(trace);
     }
+
 }

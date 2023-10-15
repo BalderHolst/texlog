@@ -165,7 +165,7 @@ impl Lexer {
                         "\nDictionary:",
                         "\nPackage:",
                         "\nFile:",
-                        "\nLaTeX:",
+                        "\nLaTeX",
                         "\nDocument Class:",
                     ]
                     .map(|s| {
