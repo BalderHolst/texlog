@@ -78,7 +78,7 @@ impl Parser {
                     .expect("This is handled by the if statement before this match")
             }
         };
-        println!("{:?}", token);
+        // println!("{:?}", token);
         self.cursor += 1;
         token
     }
@@ -92,8 +92,6 @@ impl Parser {
             TokenKind::Path(p) => p.clone(),
             _ => "no path...".to_string(),
         };
-
-        println!("Starting node {file}");
 
         let mut messages: String = "".to_string();
         let mut calls = vec![];
