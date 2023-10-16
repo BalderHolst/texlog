@@ -1,7 +1,7 @@
 use std::{fs, path::PathBuf};
 
 use crate::{
-    lexer::{self, Token, TokenKind, TexWarning},
+    lexer::{self, Token, TokenKind, TexWarningToken},
     text::SourceText, log::Log,
 };
 
@@ -33,10 +33,20 @@ pub(crate) struct Node {
     pub(crate) calls: Vec<Node>,
 
     /// List of warnings in node
-    warnings: Vec<TexWarning>,
+    warnings: Vec<TexWarningToken>,
 
     /// List of errors in node
-    errors: Vec<TexWarning>,
+    errors: Vec<TexWarningToken>,
+}
+
+impl Node {
+    pub fn warnings(&self) -> &Vec<TexWarningToken> {
+        &self.warnings
+    }
+
+    pub fn errors(&self) -> &Vec<TexWarningToken> {
+        &self.errors
+    }
 }
 
 pub struct Parser {
@@ -186,7 +196,7 @@ impl Parser {
     }
 }
 
-trait Visitor {
+pub(crate) trait Visitor {
     fn visit_node(&mut self, node: &Node) {
         self.do_visit_node(node)
     }

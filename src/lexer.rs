@@ -10,10 +10,10 @@ pub enum TexWarningKind {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct TexWarning {
-    kind: TexWarningKind,
-    log_pos: usize,
-    message: String,
+pub struct TexWarningToken {
+    pub(crate) kind: TexWarningKind,
+    pub(crate) log_pos: usize,
+    pub(crate) message: String,
 }
 
 #[derive(Debug, PartialEq)]
@@ -22,7 +22,7 @@ pub enum TokenKind {
     RightParen,
     Path(String),
     Message(String),
-    Warning(TexWarning),
+    Warning(TexWarningToken),
     EOF,
 }
 
@@ -89,7 +89,7 @@ impl Lexer {
         res
     }
 
-    fn consume_warning_if_warning(&mut self) -> Option<TexWarning> {
+    fn consume_warning_if_warning(&mut self) -> Option<TexWarningToken> {
         // pdfTeX warning:
         // LaTeX Font Warning:
         const LOOKAHEAD: usize = 20;
@@ -129,20 +129,20 @@ impl Lexer {
         text
     }
 
-    fn consume_font_warning(&mut self) -> TexWarning {
+    fn consume_font_warning(&mut self) -> TexWarningToken {
         let log_pos = self.cursor;
         let message = self.consume_warning_text();
-        TexWarning {
+        TexWarningToken {
             kind: TexWarningKind::Font,
             log_pos,
             message,
         }
     }
 
-    fn consume_pdftex_warning(&mut self) -> TexWarning {
+    fn consume_pdftex_warning(&mut self) -> TexWarningToken {
         let log_pos = self.cursor;
         let message = self.consume_warning_text();
-        TexWarning {
+        TexWarningToken {
             kind: TexWarningKind::PdfLatex,
             log_pos,
             message,
