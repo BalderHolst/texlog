@@ -7,13 +7,14 @@ use crate::{
 
 fn parse_log_file(file_path: PathBuf) -> Log {
     let text = fs::read_to_string(file_path).unwrap();
-    parse_source(&text)
+    let source = SourceText::new(text);
+    parse_source(source)
 }
 
-fn parse_source(source: &str) -> Log {
-    let tokens = lexer::tokenize(source);
+pub fn parse_source(source: SourceText) -> Log {
+    let tokens = lexer::tokenize(source.as_str());
     let mut parser = Parser::new(tokens);
-    parser.parse()
+    parser.parse(source)
 }
 
 #[derive(Debug)]
@@ -137,7 +138,7 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) -> Log {
+    pub fn parse(&mut self, source: SourceText) -> Log {
         let mut info = "".to_string();
         println!("info...");
         loop {
@@ -163,7 +164,7 @@ impl Parser {
         }
         println!("Beyond info!");
         let root_node = self.parse_node();
-        Log { info, root_node }
+        Log { info, root_node, source }
     }
 }
 
@@ -215,7 +216,7 @@ mod tests {
     #[test]
     fn trace() {
         let source = SourceText::from_file("./test/main.log").unwrap();
-        let log = parse_source(source.as_str());
+        let log = parse_source(source.clone());
         let trace = log.trace_at(source.index(7, 1));
         dbg!(&trace);
         assert_eq!(trace, vec![PathBuf::from("./main.tex")])

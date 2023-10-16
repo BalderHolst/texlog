@@ -1,5 +1,6 @@
 use std::{fs, io, path::Path, rc::Rc};
 
+#[derive(Clone)]
 pub struct SourceText {
     text: Rc<String>,
 }
@@ -20,6 +21,10 @@ impl SourceText {
 
     pub fn as_str(&self) -> &str {
         &self.text
+    }
+
+    pub fn text(&self) -> Rc<String> {
+        self.text.clone()
     }
 
     pub fn row_col(&self, index: usize) -> (usize, usize) {
