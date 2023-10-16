@@ -1,7 +1,7 @@
 use std::{fs, path::PathBuf};
 
 use crate::{
-    lexer::{self, Token, TokenKind},
+    lexer::{self, Token, TokenKind, TexWarning},
     text::SourceText, log::Log,
 };
 
@@ -31,6 +31,12 @@ pub(crate) struct Node {
 
     /// The other files that this one calls
     pub(crate) calls: Vec<Node>,
+
+    /// List of warnings in node
+    warnings: Vec<TexWarning>,
+
+    /// List of errors in node
+    errors: Vec<TexWarning>,
 }
 
 pub struct Parser {
@@ -41,7 +47,7 @@ pub struct Parser {
 impl Parser {
     /// Create a new parser from a vec of tokens
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self { cursor: 0, tokens }
+        Self { tokens, cursor: 0 }
     }
 
     fn peak(&self, offset: isize) -> &Token {
@@ -73,13 +79,14 @@ impl Parser {
             Some(t) => t,
             None => {
                 println!("Warning: Tried to consume at the end of token stream.");
+                debug_assert!(false, "Please fix this.");
                 self.cursor -= 1;
                 self.tokens
                     .last()
                     .expect("This is handled by the if statement before this match")
             }
         };
-        // println!("{:?}", token);
+        println!("{:?}", token);
         self.cursor += 1;
         token
     }
@@ -96,6 +103,8 @@ impl Parser {
 
         let mut messages: String = "".to_string();
         let mut calls = vec![];
+        let mut warnings = vec![];
+        let mut errors = vec![];
 
         let mut unclosed_text_parens: usize = 0;
 
@@ -123,6 +132,8 @@ impl Parser {
                             start_pos: pos,
                             end_pos: end_token.pos,
                             calls,
+                            warnings,
+                            errors,
                         };
                     }
                 }
@@ -134,6 +145,11 @@ impl Parser {
                     messages += m.as_str().clone();
                     self.consume();
                 }
+                TokenKind::Warning(w) => {
+                    warnings.push(w.clone());
+                    self.consume();
+                }
+                TokenKind::EOF => panic!("EOF in the middle of {}", file),
             }
         }
     }
@@ -160,6 +176,8 @@ impl Parser {
                     info += m.as_str();
                     self.consume();
                 }
+                TokenKind::Warning(_) => todo!(),
+                TokenKind::EOF => todo!(),
             }
         }
         println!("Beyond info!");

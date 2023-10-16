@@ -1,9 +1,29 @@
+use std::collections::VecDeque;
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum TexWarningKind {
+    Font,
+    Package,
+    UnderfullHbox,
+    OverfullHbox,
+    PdfLatex,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TexWarning {
+    kind: TexWarningKind,
+    log_pos: usize,
+    message: String,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum TokenKind {
     LeftParen,
     RightParen,
     Path(String),
     Message(String),
+    Warning(TexWarning),
+    EOF,
 }
 
 #[derive(Debug, PartialEq)]
@@ -29,6 +49,10 @@ struct Lexer {
 
     // The index of the current character getting lexed
     cursor: usize,
+
+    queue: VecDeque<Token>,
+
+    placed_eof: bool,
 }
 
 impl Lexer {
@@ -37,6 +61,8 @@ impl Lexer {
         Self {
             chars: source.chars().collect(),
             cursor: 0,
+            queue: VecDeque::with_capacity(10),
+            placed_eof: false,
         }
     }
 
@@ -63,8 +89,72 @@ impl Lexer {
         res
     }
 
+    fn consume_warning_if_warning(&mut self) -> Option<TexWarning> {
+        // pdfTeX warning:
+        // LaTeX Font Warning:
+        const LOOKAHEAD: usize = 20;
+        if let Some(next_chars_slice) = self.chars.get(self.cursor..self.cursor + LOOKAHEAD) {
+            match next_chars_slice.iter().collect::<String>() {
+                next_chars if next_chars.starts_with("LaTeX Font Warning: ") => {
+                    return Some(self.consume_font_warning())
+                }
+                next_chars if next_chars.starts_with("pdfTeX warning: ") => {
+                    dbg!(&next_chars);
+                    dbg!(self.consume_pdftex_warning());
+                    return Some(self.consume_pdftex_warning());
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    fn consume_warning_text(&mut self) -> String {
+        let mut text = String::new();
+        let mut paren_level: usize = 0;
+        while let Some(c) = self.current() {
+            match c {
+                '(' => paren_level += 1,
+                ')' if paren_level == 0 => break,
+                ')' => paren_level -= 1,
+                _ => {}
+            }
+
+            if (self.current(), self.peak(1)) == (Some(&'\n'), Some(&'\n')) {
+                break;
+            }
+            text.push(c.clone());
+            self.consume();
+        }
+        text
+    }
+
+    fn consume_font_warning(&mut self) -> TexWarning {
+        let log_pos = self.cursor;
+        let message = self.consume_warning_text();
+        TexWarning {
+            kind: TexWarningKind::Font,
+            log_pos,
+            message,
+        }
+    }
+
+    fn consume_pdftex_warning(&mut self) -> TexWarning {
+        let log_pos = self.cursor;
+        let message = self.consume_warning_text();
+        TexWarning {
+            kind: TexWarningKind::PdfLatex,
+            log_pos,
+            message,
+        }
+    }
+
     /// Lex next token
     fn next_token(&mut self) -> Option<Token> {
+        if !self.queue.is_empty() {
+            return self.queue.pop_front(); // This should always be `Some`
+        }
+
         let pos = self.cursor;
         match self.current()? {
             '(' => {
@@ -91,10 +181,26 @@ impl Lexer {
             }
             _ => {
                 let start_index = pos;
-                let end_index;
+                let mut end_index = pos;
 
                 // Stop at ')' or end of text.
                 loop {
+                    if let Some(warning) = self.consume_warning_if_warning() {
+                        // Push warning to queue to be returned next
+                        self.queue.push_back(Token {
+                            kind: TokenKind::Warning(warning),
+                            pos,
+                        });
+
+                        // Return the current message
+                        let bytes = self.chars[start_index..end_index].iter();
+                        let message = String::from_iter(bytes);
+                        return Some(Token {
+                            kind: TokenKind::Message(message),
+                            pos,
+                        });
+                    }
+
                     match self.current() {
                         Some(c) => {
                             if matches!(c, &')' | &'(') || self.at_path_start() {
@@ -196,7 +302,14 @@ impl Iterator for Lexer {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.next_token()
+        match self.next_token() {
+            Some(t) => Some(t),
+            None if !self.placed_eof => {
+                self.placed_eof = true;
+                Some(Token { kind: TokenKind::EOF, pos: self.cursor })
+            },
+            None => None,
+        }
     }
 }
 
@@ -245,6 +358,10 @@ mod tests {
                     kind: TokenKind::RightParen,
                     pos: 7,
                 },
+                Token {
+                    kind: TokenKind::EOF,
+                    pos: 8,
+                },
             ]
         )
     }
@@ -267,6 +384,10 @@ mod tests {
                 Token {
                     kind: TokenKind::RightParen,
                     pos: 36,
+                },
+                Token {
+                    kind: TokenKind::EOF,
+                    pos: 37,
                 },
             ]
         )
