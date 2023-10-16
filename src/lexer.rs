@@ -81,44 +81,41 @@ impl Lexer {
                     pos,
                 })
             }
-            _ => {
+            _ if self.at_path_start() => {
                 // Check of we need to lex a path
-                if self.at_path_start() {
-                    let path = self.consume_path();
-                    Some(Token {
-                        kind: TokenKind::Path(path),
-                        pos,
-                    })
+                let path = self.consume_path();
+                Some(Token {
+                    kind: TokenKind::Path(path),
+                    pos,
+                })
+            }
+            _ => {
+                let start_index = pos;
+                let end_index;
 
-                // Lex text as message
-                } else {
-                    let start_index = pos;
-                    let end_index;
-
-                    // Stop at ')' or end of text.
-                    loop {
-                        match self.current() {
-                            Some(c) => {
-                                if matches!(c, &')' | &'(') || self.at_path_start() {
-                                    end_index = self.cursor;
-                                    break;
-                                }
-                            }
-                            None => {
-                                // End of text
+                // Stop at ')' or end of text.
+                loop {
+                    match self.current() {
+                        Some(c) => {
+                            if matches!(c, &')' | &'(') || self.at_path_start() {
                                 end_index = self.cursor;
                                 break;
                             }
                         }
-                        self.consume();
+                        None => {
+                            // End of text
+                            end_index = self.cursor;
+                            break;
+                        }
                     }
-                    let bytes = self.chars[start_index..end_index].iter();
-                    let message = String::from_iter(bytes);
-                    Some(Token {
-                        kind: TokenKind::Message(message),
-                        pos,
-                    })
+                    self.consume();
                 }
+                let bytes = self.chars[start_index..end_index].iter();
+                let message = String::from_iter(bytes);
+                Some(Token {
+                    kind: TokenKind::Message(message),
+                    pos,
+                })
             }
         }
     }
