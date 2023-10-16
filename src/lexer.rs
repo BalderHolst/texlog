@@ -111,8 +111,6 @@ impl Lexer {
                     return Some(self.consume_font_warning())
                 }
                 next_chars if next_chars.starts_with("pdfTeX warning: ") => {
-                    dbg!(&next_chars);
-                    dbg!(self.consume_pdftex_warning());
                     return Some(self.consume_pdftex_warning());
                 }
                 _ => {}
@@ -154,7 +152,6 @@ impl Lexer {
     fn consume_pdftex_warning(&mut self) -> TexWarningToken {
         let log_pos = self.cursor;
         let message = self.consume_warning_text();
-        dbg!(&message);
         TexWarningToken {
             kind: TexWarningKind::PdfLatex,
             log_pos,

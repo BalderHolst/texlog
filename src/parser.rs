@@ -96,7 +96,6 @@ impl Parser {
                     .expect("This is handled by the if statement before this match")
             }
         };
-        println!("{:?}", token);
         self.cursor += 1;
         token
     }
@@ -166,7 +165,6 @@ impl Parser {
 
     pub fn parse(&mut self, source: SourceText) -> Log {
         let mut info = "".to_string();
-        println!("info...");
         loop {
             match &self.current().kind {
                 TokenKind::LeftParen => {
@@ -190,7 +188,6 @@ impl Parser {
                 TokenKind::EOF => todo!(),
             }
         }
-        println!("Beyond info!");
         let root_node = self.parse_node();
         Log { info, root_node, source }
     }
