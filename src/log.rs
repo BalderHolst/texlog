@@ -1,4 +1,11 @@
+use termion::{
+    self,
+    color::{self, Fg},
+};
+
 use std::path::PathBuf;
+
+const TEX_LOG_WIDTH: usize = 78;
 
 use crate::{
     lexer::TexWarningKind,
@@ -17,12 +24,29 @@ pub struct TexWarning {
 
 impl ToString for TexWarning {
     fn to_string(&self) -> String {
-        let mut s = format!("======= {} =======\n", self.kind.to_string());
+        let width = match termion::terminal_size() {
+            Ok((w, _h)) => w as usize,
+            Err(_) => TEX_LOG_WIDTH,
+        };
+        let title = self.kind.to_string();
+        let side_padding = (width - title.len()) / 2 - 1;
+
+        let mut s = format!(
+            "{}{} {} {}{}\n{}",
+            Fg(color::Yellow),
+            "=".repeat(side_padding),
+            title,
+            "=".repeat(side_padding),
+            "=".repeat((width + title.len()) % 2), // Add one extra padding if uneven
+            Fg(color::Reset),
+        );
         s += self.message.as_str();
         s += "\n\n";
+        s += Fg(color::Blue).to_string().as_str();
         for (i, call) in self.call_stack.iter().enumerate() {
             s += &format!("{}{}\n", "  ".repeat(i), call.display());
         }
+        s += Fg(color::Reset).to_string().as_str();
         s
     }
 }
@@ -78,8 +102,7 @@ pub struct Log {
 }
 
 impl Log {
-
-    pub fn from_path<P>(path: P) -> Self 
+    pub fn from_path<P>(path: P) -> Self
     where
         P: AsRef<std::path::Path>,
     {
@@ -139,5 +162,4 @@ mod tests {
         dbg!(&ws);
         assert_eq!(ws.len(), 20);
     }
-
 }
