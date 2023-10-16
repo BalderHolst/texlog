@@ -15,6 +15,18 @@ pub struct TexWarning {
     message: String,
 }
 
+impl ToString for TexWarning {
+    fn to_string(&self) -> String {
+        let mut s = format!("======= {} =======\n", self.kind.to_string());
+        s += self.message.as_str();
+        s += "\n\n";
+        for (i, call) in self.call_stack.iter().enumerate() {
+            s += &format!("{}{}\n", "  ".repeat(i), call.display());
+        }
+        s
+    }
+}
+
 struct WarningErrorGetter {
     call_stack: Vec<PathBuf>,
     warnings: Vec<TexWarning>,
@@ -66,6 +78,15 @@ pub struct Log {
 }
 
 impl Log {
+
+    pub fn from_path<P>(path: P) -> Self 
+    where
+        P: AsRef<std::path::Path>,
+    {
+        let source = SourceText::from_file(path).unwrap();
+        crate::parser::parse_source(source.clone())
+    }
+
     /// Returns the call stack at an index in the log file. Returns `None` if the index is outside
     /// root node.
     pub fn trace_at(&self, index: usize) -> Vec<PathBuf> {
@@ -90,23 +111,30 @@ impl Log {
         return trace;
     }
 
-    fn get_warnings_and_errors(&self) -> (Vec<TexWarning>, Vec<TexWarning>) {
+    pub fn get_warnings_and_errors(&self) -> (Vec<TexWarning>, Vec<TexWarning>) {
         let mut getter = WarningErrorGetter::new();
         getter.populate(&self.root_node);
         (getter.warnings, getter.errors)
+    }
+
+    pub fn print_warnings_and_errors(&self) {
+        let (warnings, errors) = self.get_warnings_and_errors();
+        for w in warnings {
+            println!("\n{}", w.to_string());
+        }
+        for e in errors {
+            println!("\n{}", e.to_string());
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::parse_source;
-
     use super::*;
 
     #[test]
     fn warnings() {
-        let source = SourceText::from_file("./test/main.log").unwrap();
-        let log = parse_source(source.clone());
+        let log = Log::from_path("./test/main.log");
         let (ws, es) = log.get_warnings_and_errors();
         dbg!(&ws);
         assert_eq!(ws.len(), 20);

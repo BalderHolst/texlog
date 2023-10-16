@@ -3,10 +3,22 @@ use std::collections::VecDeque;
 #[derive(Clone, Debug, PartialEq)]
 pub enum TexWarningKind {
     Font,
-    Package,
+    Package(String),
     UnderfullHbox,
     OverfullHbox,
     PdfLatex,
+}
+
+impl ToString for TexWarningKind {
+    fn to_string(&self) -> String {
+        match self {
+            TexWarningKind::Font => "Font Warning".to_string(),
+            TexWarningKind::Package(p_name) => format!("Package Warning ({})", p_name),
+            TexWarningKind::UnderfullHbox => "Underfull Hbox".to_string(),
+            TexWarningKind::OverfullHbox => "Overfull Hbox".to_string(),
+            TexWarningKind::PdfLatex => "PdfLaTeX Warning".to_string(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -142,6 +154,7 @@ impl Lexer {
     fn consume_pdftex_warning(&mut self) -> TexWarningToken {
         let log_pos = self.cursor;
         let message = self.consume_warning_text();
+        dbg!(&message);
         TexWarningToken {
             kind: TexWarningKind::PdfLatex,
             log_pos,
