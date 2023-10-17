@@ -13,10 +13,32 @@ pub enum TokenKind {
     EOF,
 }
 
+impl ToString for TokenKind {
+    fn to_string(&self) -> String {
+        match self {
+            TokenKind::LeftParen => "(".to_string(),
+            TokenKind::RightParen => "(".to_string(),
+            TokenKind::ExclamationMark => "!".to_string(),
+            TokenKind::Path(p) => p.to_owned(),
+            TokenKind::Word(w) => w.to_owned(),
+            TokenKind::Punctuation(p) => String::from_iter(&[p.clone()]),
+            TokenKind::Newline => "\n".to_string(),
+            TokenKind::Whitespace(w) => w.to_owned(),
+            TokenKind::EOF => panic!("EOF should never be converted to string."),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,
     pub pos: usize,
+}
+
+impl ToString for Token {
+    fn to_string(&self) -> String {
+        self.kind.to_string()
+    }
 }
 
 impl Token {
