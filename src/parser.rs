@@ -2,7 +2,8 @@ use std::{fs, path::PathBuf};
 
 use crate::{
     lexer::{self, Token, TokenKind},
-    text::SourceText, log::Log,
+    log::Log,
+    text::SourceText,
 };
 
 fn parse_log_file(file_path: PathBuf) -> Log {
@@ -39,9 +40,8 @@ impl ToString for TexWarningKind {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct TexWarningToken {
+pub struct TexWarning {
     pub(crate) kind: TexWarningKind,
-    pub(crate) log_pos: usize,
     pub(crate) message: String,
 }
 
@@ -61,18 +61,18 @@ pub(crate) struct Node {
     pub(crate) calls: Vec<Node>,
 
     /// List of warnings in node
-    warnings: Vec<TexWarningToken>,
+    warnings: Vec<TexWarning>,
 
     /// List of errors in node
-    errors: Vec<TexWarningToken>,
+    errors: Vec<TexWarning>,
 }
 
 impl Node {
-    pub fn warnings(&self) -> &Vec<TexWarningToken> {
+    pub fn warnings(&self) -> &Vec<TexWarning> {
         &self.warnings
     }
 
-    pub fn errors(&self) -> &Vec<TexWarningToken> {
+    pub fn errors(&self) -> &Vec<TexWarning> {
         &self.errors
     }
 }
@@ -128,6 +128,138 @@ impl Parser {
         token
     }
 
+    fn consume_warning_message(&mut self) -> String {
+        let start_index = self.cursor;
+        let end_index;
+
+        let mut paren_level = 0;
+
+        loop {
+            let this = &self.current().kind;
+            let next = &self.peak(1).kind;
+
+            if this == &TokenKind::LeftParen {
+                paren_level += 1;
+            }
+            if this == &TokenKind::RightParen {
+                if paren_level > 0 {
+                    paren_level -= 1;
+                } else {
+                    end_index = self.cursor;
+                    break;
+                }
+            }
+
+            if this == &TokenKind::Newline && next == &TokenKind::Newline {
+                end_index = self.cursor;
+                self.consume();
+                break;
+            }
+
+            self.consume();
+        }
+
+        let end_index = self.cursor;
+
+        let message: String = self.tokens[start_index..end_index]
+            .iter()
+            .map(|t| t.to_string())
+            .collect();
+
+        message
+    }
+
+    fn consume_warning_if_warning(&mut self) -> Option<TexWarning> {
+        // Must be at newline
+        if self.peak(-1).kind != TokenKind::Newline {
+            return None;
+        }
+
+        match &self.current().kind {
+
+            // pdfTeX warning:
+            TokenKind::Word(w) if w.as_str() == "pdfTeX" => {
+                if self.peak(2).kind != TokenKind::Word("warning".to_string()) {
+                    return None;
+                }
+                if self.peak(3).kind != TokenKind::Punctuation(':') {
+                    return None;
+                }
+                Some(TexWarning {
+                    kind: TexWarningKind::PdfLatex,
+                    message: self.consume_warning_message(),
+                })
+            }
+
+            // LaTeX Font Warning:
+            TokenKind::Word(w) if w.as_str() == "LaTeX" => {
+                if self.peak(2).kind != TokenKind::Word("Font".to_string()) {
+                    return None;
+                }
+                if self.peak(4).kind != TokenKind::Word("Warning".to_string()) {
+                    return None;
+                }
+                if self.peak(5).kind != TokenKind::Punctuation(':') {
+                    return None;
+                }
+                Some(TexWarning {
+                    kind: TexWarningKind::Font,
+                    message: self.consume_warning_message(),
+                })
+            }
+
+            // Overfull \hbox
+            TokenKind::Word(w) if w.as_str() == "Overfull" => {
+                if self.peak(2).kind != TokenKind::Punctuation('\\') {
+                    return None;
+                }
+                if self.peak(3).kind != TokenKind::Word("hbox".to_string()) {
+                    return None;
+                }
+                Some(TexWarning {
+                    kind: TexWarningKind::OverfullHbox,
+                    message: self.consume_warning_message(),
+                })
+            }
+
+            // Underfull \hbox
+            TokenKind::Word(w) if w.as_str() == "Underfull" => {
+                if self.peak(2).kind != TokenKind::Punctuation('\\') {
+                    return None;
+                }
+                if self.peak(3).kind != TokenKind::Word("hbox".to_string()) {
+                    return None;
+                }
+                Some(TexWarning {
+                    kind: TexWarningKind::UnderfullHbox,
+                    message: self.consume_warning_message(),
+                })
+            }
+
+            // Package wrapfig Warning:
+            TokenKind::Word(w) if w.as_str() == "Package" => {
+                let package_name;
+                if let TokenKind::Word(name) = &self.peak(2).kind {
+                    package_name = name.clone();
+                } else {
+                    return None;
+                }
+                if self.peak(4).kind != TokenKind::Word("Warning".to_string()) {
+                    return None;
+                }
+                if self.peak(5).kind != TokenKind::Punctuation(':') {
+                    return None;
+                }
+                Some(TexWarning {
+                    kind: TexWarningKind::Package(package_name),
+                    message: self.consume_warning_message(),
+                })
+            }
+
+            _ => None,
+        }
+    }
+
     fn parse_node(&mut self) -> Node {
         let pos = self.current().pos;
 
@@ -146,6 +278,10 @@ impl Parser {
         let mut unclosed_text_parens: usize = 0;
 
         loop {
+            if let Some(warning) = self.consume_warning_if_warning() {
+                warnings.push(warning);
+            }
+
             match &self.current().kind {
                 TokenKind::LeftParen => {
                     if let TokenKind::Path(_) = self.peak(1).kind {
@@ -214,19 +350,18 @@ impl Parser {
                         info += "(";
                     }
                 }
-                TokenKind::RightParen => info += ")",
-                TokenKind::Newline => info += ")",
-                TokenKind::Whitespace(w) => info += w.as_str(),
-                TokenKind::ExclamationMark => info += "!",
-                TokenKind::Punctuation(c) => info.push(c.clone()),
-                TokenKind::Word(w) => info += w.as_str(),
                 TokenKind::Path(p) => panic!("Log should not start with `path`: {p}"),
                 TokenKind::EOF => todo!(),
+                kind => info += kind.to_string().as_str(),
             }
             self.consume();
         }
         let root_node = self.parse_node();
-        Log { info, root_node, source }
+        Log {
+            info,
+            root_node,
+            source,
+        }
     }
 }
 
@@ -283,5 +418,4 @@ mod tests {
         dbg!(&trace);
         assert_eq!(trace, vec![PathBuf::from("./main.tex")])
     }
-
 }
