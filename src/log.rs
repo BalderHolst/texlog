@@ -160,6 +160,7 @@ mod tests {
         let log = Log::from_path("./test/main.log");
         let (ws, es) = log.get_warnings_and_errors();
         dbg!(&ws);
-        assert_eq!(ws.len(), 20);
+        assert_eq!(es.len(), 0);
+        assert_eq!(ws.len(), 34);
     }
 }

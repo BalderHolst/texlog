@@ -101,22 +101,87 @@ impl Lexer {
         res
     }
 
+    fn consume_whitespace(&mut self) {
+        while let Some(c) = self.current() {
+            if !c.is_whitespace() {
+                break;
+            }
+            self.consume();
+        }
+    }
+
+    fn consume_word(&mut self) -> String {
+        let mut word = String::new();
+        while let Some(c) = self.current() {
+            if !c.is_alphabetic() {
+                break;
+            }
+            word.push(c.clone());
+            self.consume();
+        }
+        word
+    }
+
     fn consume_warning_if_warning(&mut self) -> Option<TexWarningToken> {
+
+        // Only check if new line
+        if self.peak(-1) != Some(&'\n') {
+            return None;
+        }
+
         // pdfTeX warning:
         // LaTeX Font Warning:
-        const LOOKAHEAD: usize = 20;
+        // Package wrapfig Warning:
+        // Overfull \hbox
+        // Underfull \hbox
+        
+        // Only used in package warnings.
+        let mut package_name = String::new();
+
+        const LOOKAHEAD: usize = 25;
         if let Some(next_chars_slice) = self.chars.get(self.cursor..self.cursor + LOOKAHEAD) {
             match next_chars_slice.iter().collect::<String>() {
                 next_chars if next_chars.starts_with("LaTeX Font Warning: ") => {
-                    return Some(self.consume_font_warning())
+                    Some(self.consume_warning(TexWarningKind::Font))
                 }
                 next_chars if next_chars.starts_with("pdfTeX warning: ") => {
-                    return Some(self.consume_pdftex_warning());
+                    Some(self.consume_warning(TexWarningKind::PdfLatex))
                 }
-                _ => {}
+                next_chars if next_chars.starts_with(r"Overfull \hbox ") => {
+                    Some(self.consume_warning(TexWarningKind::OverfullHbox))
+                }
+                next_chars if next_chars.starts_with(r"Underfull \hbox ") => {
+                    Some(self.consume_warning(TexWarningKind::UnderfullHbox))
+                }
+                next_chars if {
+                    let mut little_lexer = Self::new(next_chars.as_str());
+                    let w1 = little_lexer.consume_word();
+                    if w1.as_str() == "Package" {
+                        little_lexer.consume_whitespace();
+                        let w2 = little_lexer.consume_word();
+                        little_lexer.consume_whitespace();
+                        let w3 = little_lexer.consume_word();
+                        if w3.as_str() == "Warning" {
+                            package_name = w2;
+                            true
+                        }
+                        else {
+                            false
+                        }
+                    }
+                    else {
+                        // If we no not match, be sure to not skip anything.
+                        false
+                    }
+
+                } => {
+                    Some(self.consume_warning(TexWarningKind::Package(package_name)))
+                }
+                _ => None,
             }
+        } else {
+            None
         }
-        None
     }
 
     fn consume_warning_text(&mut self) -> String {
@@ -139,21 +204,11 @@ impl Lexer {
         text
     }
 
-    fn consume_font_warning(&mut self) -> TexWarningToken {
+    fn consume_warning(&mut self, kind: TexWarningKind) -> TexWarningToken {
         let log_pos = self.cursor;
         let message = self.consume_warning_text();
         TexWarningToken {
-            kind: TexWarningKind::Font,
-            log_pos,
-            message,
-        }
-    }
-
-    fn consume_pdftex_warning(&mut self) -> TexWarningToken {
-        let log_pos = self.cursor;
-        let message = self.consume_warning_text();
-        TexWarningToken {
-            kind: TexWarningKind::PdfLatex,
+            kind,
             log_pos,
             message,
         }
@@ -316,8 +371,11 @@ impl Iterator for Lexer {
             Some(t) => Some(t),
             None if !self.placed_eof => {
                 self.placed_eof = true;
-                Some(Token { kind: TokenKind::EOF, pos: self.cursor })
-            },
+                Some(Token {
+                    kind: TokenKind::EOF,
+                    pos: self.cursor,
+                })
+            }
             None => None,
         }
     }
