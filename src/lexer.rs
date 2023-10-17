@@ -1,33 +1,5 @@
 use std::collections::VecDeque;
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum TexWarningKind {
-    Font,
-    Package(String),
-    UnderfullHbox,
-    OverfullHbox,
-    PdfLatex,
-}
-
-impl ToString for TexWarningKind {
-    fn to_string(&self) -> String {
-        match self {
-            TexWarningKind::Font => "Font Warning".to_string(),
-            TexWarningKind::Package(p_name) => format!("Package Warning ({})", p_name),
-            TexWarningKind::UnderfullHbox => "Underfull Hbox".to_string(),
-            TexWarningKind::OverfullHbox => "Overfull Hbox".to_string(),
-            TexWarningKind::PdfLatex => "PdfLaTeX Warning".to_string(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct TexWarningToken {
-    pub(crate) kind: TexWarningKind,
-    pub(crate) log_pos: usize,
-    pub(crate) message: String,
-}
-
 #[derive(Debug, PartialEq)]
 pub enum TokenKind {
     LeftParen,
@@ -38,7 +10,6 @@ pub enum TokenKind {
     Punctuation(char),
     Newline,
     Whitespace(String),
-    Warning(TexWarningToken),
     EOF,
 }
 
@@ -141,65 +112,65 @@ impl Lexer {
         word
     }
 
-    fn consume_warning_if_warning(&mut self) -> Option<TexWarningToken> {
-        // Only check if new line
-        if self.peak(-1) != Some(&'\n') {
-            return None;
-        }
+    // fn consume_warning_if_warning(&mut self) -> Option<TexWarningToken> {
+    //     // Only check if new line
+    //     if self.peak(-1) != Some(&'\n') {
+    //         return None;
+    //     }
 
-        // pdfTeX warning:
-        // LaTeX Font Warning:
-        // Package wrapfig Warning:
-        // Overfull \hbox
-        // Underfull \hbox
+    //     // pdfTeX warning:
+    //     // LaTeX Font Warning:
+    //     // Package wrapfig Warning:
+    //     // Overfull \hbox
+    //     // Underfull \hbox
 
-        // Only used in package warnings.
-        let mut package_name = String::new();
+    //     // Only used in package warnings.
+    //     let mut package_name = String::new();
 
-        const LOOKAHEAD: usize = 25;
-        if let Some(next_chars_slice) = self.chars.get(self.cursor..self.cursor + LOOKAHEAD) {
-            match next_chars_slice.iter().collect::<String>() {
-                next_chars if next_chars.starts_with("LaTeX Font Warning: ") => {
-                    Some(self.consume_warning(TexWarningKind::Font))
-                }
-                next_chars if next_chars.starts_with("pdfTeX warning: ") => {
-                    Some(self.consume_warning(TexWarningKind::PdfLatex))
-                }
-                next_chars if next_chars.starts_with(r"Overfull \hbox ") => {
-                    Some(self.consume_warning(TexWarningKind::OverfullHbox))
-                }
-                next_chars if next_chars.starts_with(r"Underfull \hbox ") => {
-                    Some(self.consume_warning(TexWarningKind::UnderfullHbox))
-                }
-                next_chars
-                    if {
-                        let mut little_lexer = Self::new(next_chars.as_str());
-                        let w1 = little_lexer.consume_word();
-                        if w1.as_str() == "Package" {
-                            little_lexer.consume_whitespace();
-                            let w2 = little_lexer.consume_word();
-                            little_lexer.consume_whitespace();
-                            let w3 = little_lexer.consume_word();
-                            if w3.as_str() == "Warning" {
-                                package_name = w2;
-                                true
-                            } else {
-                                false
-                            }
-                        } else {
-                            // If we no not match, be sure to not skip anything.
-                            false
-                        }
-                    } =>
-                {
-                    Some(self.consume_warning(TexWarningKind::Package(package_name)))
-                }
-                _ => None,
-            }
-        } else {
-            None
-        }
-    }
+    //     const LOOKAHEAD: usize = 25;
+    //     if let Some(next_chars_slice) = self.chars.get(self.cursor..self.cursor + LOOKAHEAD) {
+    //         match next_chars_slice.iter().collect::<String>() {
+    //             next_chars if next_chars.starts_with("LaTeX Font Warning: ") => {
+    //                 Some(self.consume_warning(TexWarningKind::Font))
+    //             }
+    //             next_chars if next_chars.starts_with("pdfTeX warning: ") => {
+    //                 Some(self.consume_warning(TexWarningKind::PdfLatex))
+    //             }
+    //             next_chars if next_chars.starts_with(r"Overfull \hbox ") => {
+    //                 Some(self.consume_warning(TexWarningKind::OverfullHbox))
+    //             }
+    //             next_chars if next_chars.starts_with(r"Underfull \hbox ") => {
+    //                 Some(self.consume_warning(TexWarningKind::UnderfullHbox))
+    //             }
+    //             next_chars
+    //                 if {
+    //                     let mut little_lexer = Self::new(next_chars.as_str());
+    //                     let w1 = little_lexer.consume_word();
+    //                     if w1.as_str() == "Package" {
+    //                         little_lexer.consume_whitespace();
+    //                         let w2 = little_lexer.consume_word();
+    //                         little_lexer.consume_whitespace();
+    //                         let w3 = little_lexer.consume_word();
+    //                         if w3.as_str() == "Warning" {
+    //                             package_name = w2;
+    //                             true
+    //                         } else {
+    //                             false
+    //                         }
+    //                     } else {
+    //                         // If we no not match, be sure to not skip anything.
+    //                         false
+    //                     }
+    //                 } =>
+    //             {
+    //                 Some(self.consume_warning(TexWarningKind::Package(package_name)))
+    //             }
+    //             _ => None,
+    //         }
+    //     } else {
+    //         None
+    //     }
+    // }
 
     fn consume_warning_text(&mut self) -> String {
         let mut text = String::new();
@@ -221,15 +192,15 @@ impl Lexer {
         text
     }
 
-    fn consume_warning(&mut self, kind: TexWarningKind) -> TexWarningToken {
-        let log_pos = self.cursor;
-        let message = self.consume_warning_text();
-        TexWarningToken {
-            kind,
-            log_pos,
-            message,
-        }
-    }
+    // fn consume_warning(&mut self, kind: TexWarningKind) -> TexWarningToken {
+    //     let log_pos = self.cursor;
+    //     let message = self.consume_warning_text();
+    //     TexWarningToken {
+    //         kind,
+    //         log_pos,
+    //         message,
+    //     }
+    // }
 
     /// Lex next token
     fn next_token(&mut self) -> Option<Token> {
@@ -268,14 +239,8 @@ impl Lexer {
                 Some(Token::new(TokenKind::Path(path), pos))
             }
             c => {
-                // Lex warning if warning
-                if let Some(warning) = self.consume_warning_if_warning() {
-                    Some(Token::new(TokenKind::Warning(warning), pos))
-                }
-                else {
-                    self.consume();
-                    Some(Token::new(TokenKind::Punctuation(c), pos))
-                }
+                self.consume();
+                Some(Token::new(TokenKind::Punctuation(c), pos))
             },
         }
     }

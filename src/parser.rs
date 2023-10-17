@@ -1,7 +1,7 @@
 use std::{fs, path::PathBuf};
 
 use crate::{
-    lexer::{self, Token, TokenKind, TexWarningToken},
+    lexer::{self, Token, TokenKind},
     text::SourceText, log::Log,
 };
 
@@ -15,6 +15,34 @@ pub fn parse_source(source: SourceText) -> Log {
     let tokens = lexer::tokenize(source.as_str());
     let mut parser = Parser::new(tokens);
     parser.parse(source)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum TexWarningKind {
+    Font,
+    Package(String),
+    UnderfullHbox,
+    OverfullHbox,
+    PdfLatex,
+}
+
+impl ToString for TexWarningKind {
+    fn to_string(&self) -> String {
+        match self {
+            TexWarningKind::Font => "Font Warning".to_string(),
+            TexWarningKind::Package(p_name) => format!("Package ({}) Warning", p_name),
+            TexWarningKind::UnderfullHbox => "Underfull Hbox".to_string(),
+            TexWarningKind::OverfullHbox => "Overfull Hbox".to_string(),
+            TexWarningKind::PdfLatex => "PdfLaTeX Warning".to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TexWarningToken {
+    pub(crate) kind: TexWarningKind,
+    pub(crate) log_pos: usize,
+    pub(crate) message: String,
 }
 
 #[derive(Debug)]
@@ -170,10 +198,6 @@ impl Parser {
                     messages += "\n";
                     self.consume();
                 }
-                TokenKind::Warning(w) => {
-                    warnings.push(w.clone());
-                    self.consume();
-                }
                 TokenKind::EOF => panic!("EOF in the middle of {}", file),
             }
         }
@@ -197,7 +221,6 @@ impl Parser {
                 TokenKind::Punctuation(c) => info.push(c.clone()),
                 TokenKind::Word(w) => info += w.as_str(),
                 TokenKind::Path(p) => panic!("Log should not start with `path`: {p}"),
-                TokenKind::Warning(_) => todo!(),
                 TokenKind::EOF => todo!(),
             }
             self.consume();

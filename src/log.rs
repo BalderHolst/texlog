@@ -8,8 +8,7 @@ use std::path::PathBuf;
 const TEX_LOG_WIDTH: usize = 78;
 
 use crate::{
-    lexer::TexWarningKind,
-    parser::{Node, Visitor},
+    parser::{Node, Visitor, TexWarningKind},
     text::SourceText,
 };
 
