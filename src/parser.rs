@@ -18,31 +18,57 @@ pub fn parse_source(source: SourceText) -> Log {
     parser.parse(source)
 }
 
+pub enum DiagnosticLevel {
+    Warning,
+    Error,
+}
+
 #[derive(Clone, Debug, PartialEq)]
-pub enum TexWarningKind {
+pub enum TexDiagnosticKind {
     Font,
     Package(String),
     UnderfullHbox,
     OverfullHbox,
     PdfLatex,
+    GenericError(String),
 }
 
-impl ToString for TexWarningKind {
+impl TexDiagnosticKind {
+    pub fn level(&self) -> DiagnosticLevel {
+        match self {
+            TexDiagnosticKind::Font => DiagnosticLevel::Warning,
+            TexDiagnosticKind::Package(_) => DiagnosticLevel::Warning,
+            TexDiagnosticKind::UnderfullHbox => DiagnosticLevel::Warning,
+            TexDiagnosticKind::OverfullHbox => DiagnosticLevel::Warning,
+            TexDiagnosticKind::PdfLatex => DiagnosticLevel::Warning,
+            TexDiagnosticKind::GenericError(_) => DiagnosticLevel::Error,
+        }
+    }
+}
+
+impl ToString for TexDiagnosticKind {
     fn to_string(&self) -> String {
         match self {
-            TexWarningKind::Font => "Font Warning".to_string(),
-            TexWarningKind::Package(p_name) => format!("Package ({}) Warning", p_name),
-            TexWarningKind::UnderfullHbox => "Underfull Hbox".to_string(),
-            TexWarningKind::OverfullHbox => "Overfull Hbox".to_string(),
-            TexWarningKind::PdfLatex => "PdfLaTeX Warning".to_string(),
+            TexDiagnosticKind::Font => "Font Warning".to_string(),
+            TexDiagnosticKind::Package(p_name) => format!("Package ({}) Warning", p_name),
+            TexDiagnosticKind::UnderfullHbox => "Underfull Hbox".to_string(),
+            TexDiagnosticKind::OverfullHbox => "Overfull Hbox".to_string(),
+            TexDiagnosticKind::PdfLatex => "PdfLaTeX Warning".to_string(),
+            TexDiagnosticKind::GenericError(e) => format!("Error: {}", e),
         }
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct TexWarning {
-    pub(crate) kind: TexWarningKind,
+pub struct TexDiagnostic {
+    pub(crate) kind: TexDiagnosticKind,
     pub(crate) message: String,
+}
+
+impl TexDiagnostic {
+    pub fn level(&self) -> DiagnosticLevel {
+        self.kind.level()
+    }
 }
 
 #[derive(Debug)]
@@ -61,18 +87,18 @@ pub(crate) struct Node {
     pub(crate) calls: Vec<Node>,
 
     /// List of warnings in node
-    warnings: Vec<TexWarning>,
+    warnings: Vec<TexDiagnostic>,
 
     /// List of errors in node
-    errors: Vec<TexWarning>,
+    errors: Vec<TexDiagnostic>,
 }
 
 impl Node {
-    pub fn warnings(&self) -> &Vec<TexWarning> {
+    pub fn warnings(&self) -> &Vec<TexDiagnostic> {
         &self.warnings
     }
 
-    pub fn errors(&self) -> &Vec<TexWarning> {
+    pub fn errors(&self) -> &Vec<TexDiagnostic> {
         &self.errors
     }
 }
@@ -169,7 +195,7 @@ impl Parser {
         message
     }
 
-    fn consume_warning_if_warning(&mut self) -> Option<TexWarning> {
+    fn consume_diag_if_diag(&mut self) -> Option<TexDiagnostic> {
         // Must be at newline
         if self.peak(-1).kind != TokenKind::Newline {
             return None;
@@ -185,8 +211,8 @@ impl Parser {
                 if self.peak(3).kind != TokenKind::Punctuation(':') {
                     return None;
                 }
-                Some(TexWarning {
-                    kind: TexWarningKind::PdfLatex,
+                Some(TexDiagnostic {
+                    kind: TexDiagnosticKind::PdfLatex,
                     message: self.consume_warning_message(),
                 })
             }
@@ -202,8 +228,8 @@ impl Parser {
                 if self.peak(5).kind != TokenKind::Punctuation(':') {
                     return None;
                 }
-                Some(TexWarning {
-                    kind: TexWarningKind::Font,
+                Some(TexDiagnostic {
+                    kind: TexDiagnosticKind::Font,
                     message: self.consume_warning_message(),
                 })
             }
@@ -216,8 +242,8 @@ impl Parser {
                 if self.peak(3).kind != TokenKind::Word("hbox".to_string()) {
                     return None;
                 }
-                Some(TexWarning {
-                    kind: TexWarningKind::OverfullHbox,
+                Some(TexDiagnostic {
+                    kind: TexDiagnosticKind::OverfullHbox,
                     message: self.consume_warning_message(),
                 })
             }
@@ -230,8 +256,8 @@ impl Parser {
                 if self.peak(3).kind != TokenKind::Word("hbox".to_string()) {
                     return None;
                 }
-                Some(TexWarning {
-                    kind: TexWarningKind::UnderfullHbox,
+                Some(TexDiagnostic {
+                    kind: TexDiagnosticKind::UnderfullHbox,
                     message: self.consume_warning_message(),
                 })
             }
@@ -250,8 +276,8 @@ impl Parser {
                 if self.peak(5).kind != TokenKind::Punctuation(':') {
                     return None;
                 }
-                Some(TexWarning {
-                    kind: TexWarningKind::Package(package_name),
+                Some(TexDiagnostic {
+                    kind: TexDiagnosticKind::Package(package_name),
                     message: self.consume_warning_message(),
                 })
             }

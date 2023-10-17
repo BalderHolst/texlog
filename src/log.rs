@@ -8,18 +8,18 @@ use std::path::PathBuf;
 const TEX_LOG_WIDTH: usize = 78;
 
 use crate::{
-    parser::{Node, Visitor, TexWarning},
+    parser::{Node, TexDiagnostic, Visitor},
     text::SourceText,
 };
 
 /// A warning with a call stach
 #[derive(Clone, Debug, PartialEq)]
-pub struct TracedTexWarning {
+pub struct TracedTexDiagnostic {
     call_stack: Vec<PathBuf>,
-    warning: TexWarning
+    warning: TexDiagnostic,
 }
 
-impl ToString for TracedTexWarning {
+impl ToString for TracedTexDiagnostic {
     fn to_string(&self) -> String {
         let width = match termion::terminal_size() {
             Ok((w, _h)) => w as usize,
@@ -28,9 +28,14 @@ impl ToString for TracedTexWarning {
         let title = self.warning.kind.to_string();
         let side_padding = (width - title.len()) / 2 - 1;
 
+        let title_color = match self.warning.level() {
+            crate::parser::DiagnosticLevel::Warning => Fg(color::Yellow).to_string(),
+            crate::parser::DiagnosticLevel::Error => Fg(color::Red).to_string(),
+        };
+
         let mut s = format!(
             "{}{} {} {}{}\n{}",
-            Fg(color::Yellow),
+            title_color,
             "=".repeat(side_padding),
             title,
             "=".repeat(side_padding),
@@ -50,8 +55,8 @@ impl ToString for TracedTexWarning {
 
 struct WarningErrorGetter {
     call_stack: Vec<PathBuf>,
-    warnings: Vec<TracedTexWarning>,
-    errors: Vec<TracedTexWarning>,
+    warnings: Vec<TracedTexDiagnostic>,
+    errors: Vec<TracedTexDiagnostic>,
 }
 
 impl WarningErrorGetter {
@@ -72,13 +77,13 @@ impl Visitor for WarningErrorGetter {
     fn visit_node(&mut self, node: &Node) {
         self.call_stack.push(PathBuf::from(node.file.clone()));
         for w in node.warnings() {
-            self.warnings.push(TracedTexWarning {
+            self.warnings.push(TracedTexDiagnostic {
                 call_stack: self.call_stack.clone(),
-                warning: w.clone()
+                warning: w.clone(),
             })
         }
         for e in node.errors() {
-            self.warnings.push(TracedTexWarning {
+            self.warnings.push(TracedTexDiagnostic {
                 call_stack: self.call_stack.clone(),
                 warning: e.clone(),
             })
@@ -127,7 +132,7 @@ impl Log {
         return trace;
     }
 
-    pub fn get_warnings_and_errors(&self) -> (Vec<TracedTexWarning>, Vec<TracedTexWarning>) {
+    pub fn get_warnings_and_errors(&self) -> (Vec<TracedTexDiagnostic>, Vec<TracedTexDiagnostic>) {
         let mut getter = WarningErrorGetter::new();
         getter.populate(&self.root_node);
         (getter.warnings, getter.errors)
