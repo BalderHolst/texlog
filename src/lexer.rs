@@ -32,8 +32,12 @@ pub struct TexWarningToken {
 pub enum TokenKind {
     LeftParen,
     RightParen,
+    ExclamationMark,
     Path(String),
-    Message(String),
+    Word(String),
+    Punctuation(char),
+    Newline,
+    Whitespace(String),
     Warning(TexWarningToken),
     EOF,
 }
@@ -45,6 +49,10 @@ pub struct Token {
 }
 
 impl Token {
+    pub fn new(kind: TokenKind, pos: usize) -> Self {
+        Self { kind, pos }
+    }
+
     pub fn has_kind(&self, kind: &TokenKind) -> bool {
         &self.kind == kind
     }
@@ -101,19 +109,30 @@ impl Lexer {
         res
     }
 
-    fn consume_whitespace(&mut self) {
+    fn is_whitespace(c: &char) -> bool {
+        c.is_whitespace() && c != &'\n'
+    }
+
+    fn consume_whitespace(&mut self) -> String {
+        let mut whitespace = String::new();
         while let Some(c) = self.current() {
-            if !c.is_whitespace() {
+            if !Self::is_whitespace(c) {
                 break;
             }
+            whitespace.push(c.clone());
             self.consume();
         }
+        whitespace
+    }
+
+    fn is_word_char(c: &char) -> bool {
+        c.is_alphabetic()
     }
 
     fn consume_word(&mut self) -> String {
         let mut word = String::new();
         while let Some(c) = self.current() {
-            if !c.is_alphabetic() {
+            if !Self::is_word_char(c) {
                 break;
             }
             word.push(c.clone());
@@ -123,7 +142,6 @@ impl Lexer {
     }
 
     fn consume_warning_if_warning(&mut self) -> Option<TexWarningToken> {
-
         // Only check if new line
         if self.peak(-1) != Some(&'\n') {
             return None;
@@ -134,7 +152,7 @@ impl Lexer {
         // Package wrapfig Warning:
         // Overfull \hbox
         // Underfull \hbox
-        
+
         // Only used in package warnings.
         let mut package_name = String::new();
 
@@ -153,28 +171,27 @@ impl Lexer {
                 next_chars if next_chars.starts_with(r"Underfull \hbox ") => {
                     Some(self.consume_warning(TexWarningKind::UnderfullHbox))
                 }
-                next_chars if {
-                    let mut little_lexer = Self::new(next_chars.as_str());
-                    let w1 = little_lexer.consume_word();
-                    if w1.as_str() == "Package" {
-                        little_lexer.consume_whitespace();
-                        let w2 = little_lexer.consume_word();
-                        little_lexer.consume_whitespace();
-                        let w3 = little_lexer.consume_word();
-                        if w3.as_str() == "Warning" {
-                            package_name = w2;
-                            true
-                        }
-                        else {
+                next_chars
+                    if {
+                        let mut little_lexer = Self::new(next_chars.as_str());
+                        let w1 = little_lexer.consume_word();
+                        if w1.as_str() == "Package" {
+                            little_lexer.consume_whitespace();
+                            let w2 = little_lexer.consume_word();
+                            little_lexer.consume_whitespace();
+                            let w3 = little_lexer.consume_word();
+                            if w3.as_str() == "Warning" {
+                                package_name = w2;
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            // If we no not match, be sure to not skip anything.
                             false
                         }
-                    }
-                    else {
-                        // If we no not match, be sure to not skip anything.
-                        false
-                    }
-
-                } => {
+                    } =>
+                {
                     Some(self.consume_warning(TexWarningKind::Package(package_name)))
                 }
                 _ => None,
@@ -221,73 +238,45 @@ impl Lexer {
         }
 
         let pos = self.cursor;
-        match self.current()? {
+        match self.current()?.clone() {
             '(' => {
                 self.consume();
-                Some(Token {
-                    kind: TokenKind::LeftParen,
-                    pos,
-                })
+                Some(Token::new(TokenKind::LeftParen, pos))
             }
             ')' => {
                 self.consume();
-                Some(Token {
-                    kind: TokenKind::RightParen,
-                    pos,
-                })
+                Some(Token::new(TokenKind::RightParen, pos))
+            }
+            '!' => {
+                self.consume();
+                Some(Token::new(TokenKind::ExclamationMark, pos))
+            }
+            '\n' => {
+                self.consume();
+                Some(Token::new(TokenKind::Newline, pos))
+            }
+            c if Self::is_word_char(&c) => {
+                let word = self.consume_word();
+                Some(Token::new(TokenKind::Word(word), pos))
+            }
+            c if Self::is_whitespace(&c) => {
+                let whitespace = self.consume_whitespace();
+                Some(Token::new(TokenKind::Whitespace(whitespace), pos))
             }
             _ if self.at_path_start() => {
-                // Check of we need to lex a path
                 let path = self.consume_path();
-                Some(Token {
-                    kind: TokenKind::Path(path),
-                    pos,
-                })
+                Some(Token::new(TokenKind::Path(path), pos))
             }
-            _ => {
-                let start_index = pos;
-                let mut end_index = pos;
-
-                // Stop at ')' or end of text.
-                loop {
-                    if let Some(warning) = self.consume_warning_if_warning() {
-                        // Push warning to queue to be returned next
-                        self.queue.push_back(Token {
-                            kind: TokenKind::Warning(warning),
-                            pos,
-                        });
-
-                        // Return the current message
-                        let bytes = self.chars[start_index..end_index].iter();
-                        let message = String::from_iter(bytes);
-                        return Some(Token {
-                            kind: TokenKind::Message(message),
-                            pos,
-                        });
-                    }
-
-                    match self.current() {
-                        Some(c) => {
-                            if matches!(c, &')' | &'(') || self.at_path_start() {
-                                end_index = self.cursor;
-                                break;
-                            }
-                        }
-                        None => {
-                            // End of text
-                            end_index = self.cursor;
-                            break;
-                        }
-                    }
-                    self.consume();
+            c => {
+                // Lex warning if warning
+                if let Some(warning) = self.consume_warning_if_warning() {
+                    Some(Token::new(TokenKind::Warning(warning), pos))
                 }
-                let bytes = self.chars[start_index..end_index].iter();
-                let message = String::from_iter(bytes);
-                Some(Token {
-                    kind: TokenKind::Message(message),
-                    pos,
-                })
-            }
+                else {
+                    self.consume();
+                    Some(Token::new(TokenKind::Punctuation(c), pos))
+                }
+            },
         }
     }
 

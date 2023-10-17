@@ -79,7 +79,7 @@ impl Parser {
         if self.tokens.is_empty() {
             eprintln!("Warning: Called `consume` but token stream is empty.");
             self.tokens.push(Token {
-                kind: TokenKind::Message("".to_string()),
+                kind: TokenKind::Word("".to_string()),
                 pos: 0,
             });
             return self.tokens.last().unwrap();
@@ -150,8 +150,24 @@ impl Parser {
                     messages += p.as_str().clone();
                     self.consume();
                 }
-                TokenKind::Message(m) => {
-                    messages += m.as_str().clone();
+                TokenKind::Word(w) => {
+                    messages += w.as_str().clone();
+                    self.consume();
+                }
+                TokenKind::Whitespace(w) => {
+                    messages += w.as_str().clone();
+                    self.consume();
+                }
+                TokenKind::ExclamationMark => {
+                    messages += "!";
+                    self.consume();
+                }
+                TokenKind::Punctuation(c) => {
+                    messages.push(c.clone());
+                    self.consume();
+                }
+                TokenKind::Newline => {
+                    messages += "\n";
                     self.consume();
                 }
                 TokenKind::Warning(w) => {
@@ -172,21 +188,19 @@ impl Parser {
                         break;
                     } else {
                         info += "(";
-                        self.consume();
                     }
                 }
-                TokenKind::RightParen => {
-                    info += ")";
-                    self.consume();
-                }
+                TokenKind::RightParen => info += ")",
+                TokenKind::Newline => info += ")",
+                TokenKind::Whitespace(w) => info += w.as_str(),
+                TokenKind::ExclamationMark => info += "!",
+                TokenKind::Punctuation(c) => info.push(c.clone()),
+                TokenKind::Word(w) => info += w.as_str(),
                 TokenKind::Path(p) => panic!("Log should not start with `path`: {p}"),
-                TokenKind::Message(m) => {
-                    info += m.as_str();
-                    self.consume();
-                }
                 TokenKind::Warning(_) => todo!(),
                 TokenKind::EOF => todo!(),
             }
+            self.consume();
         }
         let root_node = self.parse_node();
         Log { info, root_node, source }
