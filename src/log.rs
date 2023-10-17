@@ -8,26 +8,24 @@ use std::path::PathBuf;
 const TEX_LOG_WIDTH: usize = 78;
 
 use crate::{
-    parser::{Node, Visitor, TexWarningKind},
+    parser::{Node, Visitor, TexWarning},
     text::SourceText,
 };
 
 /// A warning with a call stach
 #[derive(Clone, Debug, PartialEq)]
-pub struct TexWarning {
+pub struct TracedTexWarning {
     call_stack: Vec<PathBuf>,
-    kind: TexWarningKind,
-    log_pos: usize,
-    message: String,
+    warning: TexWarning
 }
 
-impl ToString for TexWarning {
+impl ToString for TracedTexWarning {
     fn to_string(&self) -> String {
         let width = match termion::terminal_size() {
             Ok((w, _h)) => w as usize,
             Err(_) => TEX_LOG_WIDTH,
         };
-        let title = self.kind.to_string();
+        let title = self.warning.kind.to_string();
         let side_padding = (width - title.len()) / 2 - 1;
 
         let mut s = format!(
@@ -39,7 +37,7 @@ impl ToString for TexWarning {
             "=".repeat((width + title.len()) % 2), // Add one extra padding if uneven
             Fg(color::Reset),
         );
-        s += self.message.as_str();
+        s += self.warning.message.as_str();
         s += "\n\n";
         s += Fg(color::Blue).to_string().as_str();
         for (i, call) in self.call_stack.iter().enumerate() {
@@ -52,8 +50,8 @@ impl ToString for TexWarning {
 
 struct WarningErrorGetter {
     call_stack: Vec<PathBuf>,
-    warnings: Vec<TexWarning>,
-    errors: Vec<TexWarning>,
+    warnings: Vec<TracedTexWarning>,
+    errors: Vec<TracedTexWarning>,
 }
 
 impl WarningErrorGetter {
@@ -74,19 +72,15 @@ impl Visitor for WarningErrorGetter {
     fn visit_node(&mut self, node: &Node) {
         self.call_stack.push(PathBuf::from(node.file.clone()));
         for w in node.warnings() {
-            self.warnings.push(TexWarning {
+            self.warnings.push(TracedTexWarning {
                 call_stack: self.call_stack.clone(),
-                kind: w.kind.clone(),
-                log_pos: w.log_pos.clone(),
-                message: w.message.clone(),
+                warning: w.clone()
             })
         }
         for e in node.errors() {
-            self.warnings.push(TexWarning {
+            self.warnings.push(TracedTexWarning {
                 call_stack: self.call_stack.clone(),
-                kind: e.kind.clone(),
-                log_pos: e.log_pos.clone(),
-                message: e.message.clone(),
+                warning: e.clone(),
             })
         }
         self.do_visit_node(node);
@@ -133,7 +127,7 @@ impl Log {
         return trace;
     }
 
-    pub fn get_warnings_and_errors(&self) -> (Vec<TexWarning>, Vec<TexWarning>) {
+    pub fn get_warnings_and_errors(&self) -> (Vec<TracedTexWarning>, Vec<TracedTexWarning>) {
         let mut getter = WarningErrorGetter::new();
         getter.populate(&self.root_node);
         (getter.warnings, getter.errors)
