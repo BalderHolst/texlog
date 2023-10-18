@@ -12,11 +12,11 @@ use crate::{
     text::SourceText,
 };
 
-/// A warning with a call stach
+/// A diagnostic with a call trace
 #[derive(Clone, Debug, PartialEq)]
 pub struct TracedTexDiagnostic {
     call_stack: Vec<PathBuf>,
-    warning: TexDiagnostic,
+    diagnostic: TexDiagnostic,
 }
 
 impl ToString for TracedTexDiagnostic {
@@ -25,10 +25,10 @@ impl ToString for TracedTexDiagnostic {
             Ok((w, _h)) => w as usize,
             Err(_) => TEX_LOG_WIDTH,
         };
-        let title = self.warning.kind.to_string();
+        let title = self.diagnostic.kind.to_string();
         let side_padding = (width - title.len()) / 2 - 1;
 
-        let title_color = match self.warning.level() {
+        let title_color = match self.diagnostic.level() {
             crate::parser::DiagnosticLevel::Warning => Fg(color::Yellow).to_string(),
             crate::parser::DiagnosticLevel::Error => Fg(color::Red).to_string(),
         };
@@ -42,7 +42,7 @@ impl ToString for TracedTexDiagnostic {
             "=".repeat((width + title.len()) % 2), // Add one extra padding if uneven
             Fg(color::Reset),
         );
-        s += self.warning.message.as_str();
+        s += self.diagnostic.message.as_str();
         s += "\n\n";
         s += Fg(color::Blue).to_string().as_str();
         for (i, call) in self.call_stack.iter().enumerate() {
@@ -53,18 +53,16 @@ impl ToString for TracedTexDiagnostic {
     }
 }
 
-struct WarningErrorGetter {
+struct DiagnosticGetter {
     call_stack: Vec<PathBuf>,
-    warnings: Vec<TracedTexDiagnostic>,
-    errors: Vec<TracedTexDiagnostic>,
+    diagsnostics: Vec<TracedTexDiagnostic>,
 }
 
-impl WarningErrorGetter {
+impl DiagnosticGetter {
     fn new() -> Self {
         Self {
             call_stack: Vec::new(),
-            warnings: Vec::new(),
-            errors: Vec::new(),
+            diagsnostics: Vec::new(),
         }
     }
 
@@ -73,19 +71,13 @@ impl WarningErrorGetter {
     }
 }
 
-impl Visitor for WarningErrorGetter {
+impl Visitor for DiagnosticGetter {
     fn visit_node(&mut self, node: &Node) {
         self.call_stack.push(PathBuf::from(node.file.clone()));
-        for w in node.warnings() {
-            self.warnings.push(TracedTexDiagnostic {
+        for d in node.diagnostics() {
+            self.diagsnostics.push(TracedTexDiagnostic {
                 call_stack: self.call_stack.clone(),
-                warning: w.clone(),
-            })
-        }
-        for e in node.errors() {
-            self.warnings.push(TracedTexDiagnostic {
-                call_stack: self.call_stack.clone(),
-                warning: e.clone(),
+                diagnostic: d.clone(),
             })
         }
         self.do_visit_node(node);
@@ -132,32 +124,67 @@ impl Log {
         return trace;
     }
 
-    pub fn get_warnings_and_errors(&self) -> (Vec<TracedTexDiagnostic>, Vec<TracedTexDiagnostic>) {
-        let mut getter = WarningErrorGetter::new();
+    pub fn get_diagnostics(&self) -> Vec<TracedTexDiagnostic> {
+        let mut getter = DiagnosticGetter::new();
         getter.populate(&self.root_node);
-        (getter.warnings, getter.errors)
+        getter.diagsnostics
     }
 
-    pub fn print_warnings_and_errors(&self) {
-        let (warnings, errors) = self.get_warnings_and_errors();
-        for w in warnings {
-            println!("\n{}", w.to_string());
-        }
-        for e in errors {
-            println!("\n{}", e.to_string());
+    pub fn print_diagnostics(&self) {
+        let diags = self.get_diagnostics();
+        for d in diags {
+            println!("\n{}", d.to_string());
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::parser::parse_source;
+
     use super::*;
 
     #[test]
     fn warnings() {
         let log = Log::from_path("./test/main.log");
-        let (ws, es) = log.get_warnings_and_errors();
-        assert_eq!(es.len(), 0);
-        assert_eq!(ws.len(), 34);
+        let ds = log.get_diagnostics();
+        assert_eq!(ds.len(), 34);
+    }
+
+    #[test]
+    fn errors() {
+        let text = r"
+(./main.tex
+
+! Too many }'s.
+l.6 \date December 2004}
+
+
+! Undefined control sequence.
+l.6 \dtae
+{December 2004}
+
+(./some/math/doc.tex
+! Missing $ inserted
+)
+
+Runaway argument?
+{December 2004 \maketitle
+! Paragraph ended before \date was complete.
+<to be read again>
+\par
+l.8
+
+! LaTeX Error: File `paralisy.sty' not found.
+Type X to quit or <RETURN> to proceed,
+or enter new name. (Default extension: sty)
+Enter file name:
+)
+";
+        let source = SourceText::new(text.to_string());
+        let log = parse_source(source);
+        let ds = log.get_diagnostics();
+        log.print_diagnostics();
+        assert_eq!(ds.len(), 5);
     }
 }

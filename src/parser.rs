@@ -18,6 +18,7 @@ pub fn parse_source(source: SourceText) -> Log {
     parser.parse(source)
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum DiagnosticLevel {
     Warning,
     Error,
@@ -86,20 +87,28 @@ pub(crate) struct Node {
     /// The other files that this one calls
     pub(crate) calls: Vec<Node>,
 
-    /// List of warnings in node
-    warnings: Vec<TexDiagnostic>,
-
-    /// List of errors in node
-    errors: Vec<TexDiagnostic>,
+    /// List of diagnostics in node
+    diagnostics: Vec<TexDiagnostic>,
 }
 
 impl Node {
-    pub fn warnings(&self) -> &Vec<TexDiagnostic> {
-        &self.warnings
+    
+    pub fn diagnostics(&self) -> &Vec<TexDiagnostic> {
+        &self.diagnostics
     }
 
-    pub fn errors(&self) -> &Vec<TexDiagnostic> {
-        &self.errors
+    pub fn warnings(&self) -> Vec<&TexDiagnostic> {
+        self.diagnostics
+            .iter()
+            .filter(|d| d.level() == DiagnosticLevel::Warning)
+            .collect()
+    }
+
+    pub fn errors(&self) -> Vec<&TexDiagnostic> {
+        self.diagnostics
+            .iter()
+            .filter(|d| d.level() == DiagnosticLevel::Error)
+            .collect()
     }
 }
 
@@ -131,9 +140,11 @@ impl Parser {
     /// Get token under cursor and increment cursor
     fn consume(&mut self) -> &Token {
         if self.tokens.is_empty() {
-            eprintln!("Warning: Called `consume` but token stream is empty.");
+            if cfg!(Debug) {
+                eprintln!("Warning: Called `consume` but token stream is empty.");
+            }
             self.tokens.push(Token {
-                kind: TokenKind::Word("".to_string()),
+                kind: TokenKind::EOF,
                 pos: 0,
             });
             return self.tokens.last().unwrap();
@@ -154,7 +165,7 @@ impl Parser {
         token
     }
 
-    fn consume_warning_message(&mut self) -> String {
+    fn consume_diagnostic_message(&mut self) -> String {
         let start_index = self.cursor;
         let end_index;
 
@@ -202,7 +213,6 @@ impl Parser {
         }
 
         match &self.current().kind {
-
             // pdfTeX warning:
             TokenKind::Word(w) if w.as_str() == "pdfTeX" => {
                 if self.peak(2).kind != TokenKind::Word("warning".to_string()) {
@@ -213,7 +223,7 @@ impl Parser {
                 }
                 Some(TexDiagnostic {
                     kind: TexDiagnosticKind::PdfLatex,
-                    message: self.consume_warning_message(),
+                    message: self.consume_diagnostic_message(),
                 })
             }
 
@@ -230,7 +240,7 @@ impl Parser {
                 }
                 Some(TexDiagnostic {
                     kind: TexDiagnosticKind::Font,
-                    message: self.consume_warning_message(),
+                    message: self.consume_diagnostic_message(),
                 })
             }
 
@@ -244,7 +254,7 @@ impl Parser {
                 }
                 Some(TexDiagnostic {
                     kind: TexDiagnosticKind::OverfullHbox,
-                    message: self.consume_warning_message(),
+                    message: self.consume_diagnostic_message(),
                 })
             }
 
@@ -258,7 +268,7 @@ impl Parser {
                 }
                 Some(TexDiagnostic {
                     kind: TexDiagnosticKind::UnderfullHbox,
-                    message: self.consume_warning_message(),
+                    message: self.consume_diagnostic_message(),
                 })
             }
 
@@ -278,7 +288,35 @@ impl Parser {
                 }
                 Some(TexDiagnostic {
                     kind: TexDiagnosticKind::Package(package_name),
-                    message: self.consume_warning_message(),
+                    message: self.consume_diagnostic_message(),
+                })
+            }
+
+            // GenericError
+            TokenKind::ExclamationMark => {
+                let err_start = self.cursor;
+
+                assert_eq!(self.consume().kind, TokenKind::ExclamationMark);
+
+                loop {
+                    match &self.current().kind {
+                        TokenKind::Newline => break,
+                        TokenKind::EOF => break,
+                        _ => {}
+                    }
+                    self.consume();
+                }
+                let title: String = self.tokens[err_start + 2..self.cursor]
+                    .iter()
+                    .map(|t| t.to_string())
+                    .collect();
+
+                // Reset cursor to get full diagnostic
+                self.cursor = err_start;
+
+                Some(TexDiagnostic {
+                    kind: TexDiagnosticKind::GenericError(title.clone()),
+                    message: self.consume_diagnostic_message(),
                 })
             }
 
@@ -298,14 +336,13 @@ impl Parser {
 
         let mut messages: String = "".to_string();
         let mut calls = vec![];
-        let mut warnings = vec![];
-        let mut errors = vec![];
+        let mut diagnostics = vec![];
 
         let mut unclosed_text_parens: usize = 0;
 
         loop {
-            if let Some(warning) = self.consume_warning_if_warning() {
-                warnings.push(warning);
+            if let Some(diag) = self.consume_diag_if_diag() {
+                diagnostics.push(diag);
             }
 
             match &self.current().kind {
@@ -331,8 +368,7 @@ impl Parser {
                             start_pos: pos,
                             end_pos: end_token.pos,
                             calls,
-                            warnings,
-                            errors,
+                            diagnostics,
                         };
                     }
                 }

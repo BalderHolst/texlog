@@ -207,6 +207,7 @@ impl Lexer {
                 Some(&'>') => break,
                 Some(&'[') => break,
                 Some(&']') => break,
+                Some(&'!') => break,
                 Some(&'\\') => break,
 
                 // TODO: This is an awful solution
@@ -216,6 +217,7 @@ impl Lexer {
                 // if the paths continue on the next line.
                 Some(_)
                     if &[
+                        "\n! ", // Error
                         "\nDictionary:",
                         "\nPackage:",
                         "\nFile:",
