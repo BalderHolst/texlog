@@ -173,7 +173,7 @@ impl Lexer {
             c => {
                 self.consume();
                 Some(Token::new(TokenKind::Punctuation(c), pos))
-            },
+            }
         }
     }
 

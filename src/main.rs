@@ -1,12 +1,11 @@
 use clap::Parser;
 use log::Log;
 
-mod parser;
-mod lexer;
-mod text;
-mod log;
 mod cli;
-
+mod lexer;
+mod log;
+mod parser;
+mod text;
 
 fn main() {
     let args = cli::Args::parse();

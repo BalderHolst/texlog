@@ -4,9 +4,7 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub(crate) struct Args {
-
     /// Latex log file
     #[clap(index = 1)]
     pub(crate) file: String,
-
 }

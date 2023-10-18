@@ -92,7 +92,6 @@ pub(crate) struct Node {
 }
 
 impl Node {
-    
     pub fn diagnostics(&self) -> &Vec<TexDiagnostic> {
         &self.diagnostics
     }
