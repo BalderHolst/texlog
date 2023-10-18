@@ -10,7 +10,7 @@ pub enum TokenKind {
     Punctuation(char),
     Newline,
     Whitespace(String),
-    EOF,
+    EOF, // End of log
 }
 
 impl ToString for TokenKind {

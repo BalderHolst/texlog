@@ -166,32 +166,27 @@ impl Parser {
 
     fn consume_diagnostic_message(&mut self) -> String {
         let start_index = self.cursor;
-        let end_index;
 
         let mut paren_level = 0;
 
         loop {
             let this = &self.current().kind;
             let next = &self.peak(1).kind;
-
-            if this == &TokenKind::LeftParen {
-                paren_level += 1;
-            }
-            if this == &TokenKind::RightParen {
-                if paren_level > 0 {
-                    paren_level -= 1;
-                } else {
-                    end_index = self.cursor;
+            match this {
+                TokenKind::LeftParen => paren_level += 1,
+                TokenKind::RightParen => {
+                    if paren_level > 0 {
+                        paren_level -= 1;
+                    } else {
+                        break;
+                    }
+                },
+                TokenKind::Newline if next == &TokenKind::Newline => {
+                    self.consume();
                     break;
-                }
+                },
+                _ => {},
             }
-
-            if this == &TokenKind::Newline && next == &TokenKind::Newline {
-                end_index = self.cursor;
-                self.consume();
-                break;
-            }
-
             self.consume();
         }
 
@@ -202,7 +197,7 @@ impl Parser {
             .map(|t| t.to_string())
             .collect();
 
-        message
+        message.trim().to_string()
     }
 
     fn consume_diag_if_diag(&mut self) -> Option<TexDiagnostic> {
@@ -297,6 +292,7 @@ impl Parser {
 
                 assert_eq!(self.consume().kind, TokenKind::ExclamationMark);
 
+                // Get error title
                 loop {
                     match &self.current().kind {
                         TokenKind::Newline => break,
@@ -312,6 +308,16 @@ impl Parser {
 
                 // Reset cursor to get full diagnostic
                 self.cursor = err_start;
+
+                // Look back for start of error message
+                loop {
+                    match &self.peak(-1).kind {
+                        TokenKind::Newline if &self.peak(-2).kind == &TokenKind::Newline => break,
+                        TokenKind::EOF => break,
+                        TokenKind::Path(_) => break,
+                        _ => self.cursor -= 1,
+                    }
+                }
 
                 Some(TexDiagnostic {
                     kind: TexDiagnosticKind::GenericError(title.clone()),
