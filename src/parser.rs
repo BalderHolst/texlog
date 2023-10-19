@@ -1,16 +1,8 @@
-use std::{fs, path::PathBuf};
-
 use crate::{
     lexer::{self, Token, TokenKind},
     log::Log,
     text::SourceText,
 };
-
-fn parse_log_file(file_path: PathBuf) -> Log {
-    let text = fs::read_to_string(file_path).unwrap();
-    let source = SourceText::new(text);
-    parse_source(source)
-}
 
 pub fn parse_source(source: SourceText) -> Log {
     let tokens = lexer::tokenize(source.as_str());
@@ -312,7 +304,7 @@ impl Parser {
                 // Look back for start of error message
                 loop {
                     match &self.peak(-1).kind {
-                        TokenKind::Newline if &self.peak(-2).kind == &TokenKind::Newline => break,
+                        TokenKind::Newline if self.peak(-2).kind == TokenKind::Newline => break,
                         TokenKind::EOF => break,
                         TokenKind::Path(_) => break,
                         _ => self.cursor -= 1,
@@ -320,7 +312,7 @@ impl Parser {
                 }
 
                 Some(TexDiagnostic {
-                    kind: TexDiagnosticKind::GenericError(title.clone()),
+                    kind: TexDiagnosticKind::GenericError(title),
                     message: self.consume_diagnostic_message(),
                 })
             }
@@ -378,15 +370,15 @@ impl Parser {
                     }
                 }
                 TokenKind::Path(p) => {
-                    messages += p.as_str().clone();
+                    messages += p.as_str();
                     self.consume();
                 }
                 TokenKind::Word(w) => {
-                    messages += w.as_str().clone();
+                    messages += w.as_str();
                     self.consume();
                 }
                 TokenKind::Whitespace(w) => {
-                    messages += w.as_str().clone();
+                    messages += w.as_str();
                     self.consume();
                 }
                 TokenKind::ExclamationMark => {
@@ -394,7 +386,7 @@ impl Parser {
                     self.consume();
                 }
                 TokenKind::Punctuation(c) => {
-                    messages.push(c.clone());
+                    messages.push(*c);
                     self.consume();
                 }
                 TokenKind::Newline => {
@@ -475,6 +467,8 @@ impl Visitor for Printer {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
 
     #[test]

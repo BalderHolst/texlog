@@ -31,12 +31,9 @@ impl SourceText {
         let mut row = 1;
         let mut last_line_start = 0;
         for (i, c) in self.text[..index].chars().enumerate() {
-            match c {
-                '\n' => {
-                    row += 1;
-                    last_line_start = i + 1;
-                }
-                _ => {}
+            if c == '\n'  {
+                row += 1;
+                last_line_start = i + 1;
             }
         }
         (row, index - last_line_start + 1)
@@ -62,7 +59,7 @@ impl SourceText {
         // Add col
         index += col - 1;
 
-        return index;
+        index
     }
 }
 
@@ -73,11 +70,11 @@ mod tests {
     #[test]
     fn row_col() {
         let source = SourceText::from_file("./test/main.log").unwrap();
-        for input_index in vec![0, 1, 120, 121, 300, 600, 700, 900, 1100, 1500] {
-            let (row, col) = source.row_col(input_index);
+        for input_index in &[0, 1, 120, 121, 300, 600, 700, 900, 1100, 1500] {
+            let (row, col) = source.row_col(*input_index);
             let output_index = source.index(row, col);
             println!("{} -> {:?} -> {}", input_index, (&row, &col), output_index);
-            assert_eq!(input_index, output_index)
+            assert_eq!(*input_index, output_index)
         }
     }
 }

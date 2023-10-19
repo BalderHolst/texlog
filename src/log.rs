@@ -97,22 +97,22 @@ impl Log {
         P: AsRef<std::path::Path>,
     {
         let source = SourceText::from_file(path).unwrap();
-        crate::parser::parse_source(source.clone())
+        crate::parser::parse_source(source)
     }
 
     /// Returns the call stack at an index in the log file. Returns `None` if the index is outside
     /// root node.
     pub fn trace_at(&self, index: usize) -> Vec<PathBuf> {
-        let mut trace = self.trace_from_node(index, &self.root_node);
+        let mut trace = Self::trace_from_node(index, &self.root_node);
         trace.reverse();
         trace
     }
 
-    fn trace_from_node(&self, index: usize, root_node: &Node) -> Vec<PathBuf> {
+    fn trace_from_node(index: usize, root_node: &Node) -> Vec<PathBuf> {
         let file = PathBuf::from(&root_node.file);
         for sub_node in &root_node.calls {
             if sub_node.start_pos <= index && index <= sub_node.end_pos {
-                let mut trace = self.trace_from_node(index, sub_node);
+                let mut trace = Self::trace_from_node(index, sub_node);
                 trace.push(file);
                 return trace;
             }
@@ -121,7 +121,7 @@ impl Log {
         // This is the leaf node
         let mut trace = Vec::with_capacity(20);
         trace.push(file);
-        return trace;
+        trace
     }
 
     pub fn get_diagnostics(&self) -> Vec<TracedTexDiagnostic> {

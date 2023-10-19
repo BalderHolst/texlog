@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, PartialEq)]
 pub enum TokenKind {
     LeftParen,
@@ -21,7 +22,7 @@ impl ToString for TokenKind {
             TokenKind::ExclamationMark => "!".to_string(),
             TokenKind::Path(p) => p.to_owned(),
             TokenKind::Word(w) => w.to_owned(),
-            TokenKind::Punctuation(p) => String::from_iter(&[p.clone()]),
+            TokenKind::Punctuation(p) => String::from_iter(&[*p]),
             TokenKind::Newline => "\n".to_string(),
             TokenKind::Whitespace(w) => w.to_owned(),
             TokenKind::EOF => panic!("EOF should never be converted to string."),
@@ -112,7 +113,7 @@ impl Lexer {
             if !Self::is_whitespace(c) {
                 break;
             }
-            whitespace.push(c.clone());
+            whitespace.push(*c);
             self.consume();
         }
         whitespace
@@ -128,7 +129,7 @@ impl Lexer {
             if !Self::is_word_char(c) {
                 break;
             }
-            word.push(c.clone());
+            word.push(*c);
             self.consume();
         }
         word
@@ -141,7 +142,7 @@ impl Lexer {
         }
 
         let pos = self.cursor;
-        match self.current()?.clone() {
+        match *self.current()? {
             '(' => {
                 self.consume();
                 Some(Token::new(TokenKind::LeftParen, pos))
@@ -181,11 +182,7 @@ impl Lexer {
     fn at_path_start(&self) -> bool {
         match self.current().cloned() {
             Some('.') => {
-                if self.peak(1) == Some(&'/') {
-                    true
-                } else {
-                    false
-                }
+                self.peak(1) == Some(&'/')
             }
             Some('/') => true,
             _ => false,
@@ -196,7 +193,7 @@ impl Lexer {
     fn consume_path(&mut self) -> String {
         let mut chars = vec![];
         while self.at_path_start() {
-            chars.push(self.consume().unwrap().clone());
+            chars.push(*self.consume().unwrap());
         }
 
         loop {
@@ -216,7 +213,7 @@ impl Lexer {
                 // reported incorrectly, but i cannot figure out a way to determine
                 // if the paths continue on the next line.
                 Some(_)
-                    if &[
+                    if [
                         "\n! ", // Error
                         "\nDictionary:",
                         "\nPackage:",
@@ -231,7 +228,7 @@ impl Lexer {
                     .iter()
                     .filter(|e| **e)
                     .count()
-                        > &0 =>
+                        > 0 =>
                 {
                     break
                 }
@@ -241,7 +238,7 @@ impl Lexer {
 
                 Some(c) if c.is_whitespace() => break,
                 Some(c) => {
-                    chars.push(c.clone());
+                    chars.push(*c);
                     self.consume();
                 }
                 None => break,
