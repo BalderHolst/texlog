@@ -130,10 +130,26 @@ impl Log {
         getter.diagsnostics
     }
 
-    pub fn print_diagnostics(&self) {
+    pub fn get_warnings_and_errors(&self) -> (Vec<TracedTexDiagnostic>, Vec<TracedTexDiagnostic>) {
         let diags = self.get_diagnostics();
+        let mut ws = Vec::with_capacity(30);
+        let mut es = Vec::with_capacity(5);
         for d in diags {
-            println!("\n{}", d.to_string());
+            match d.diagnostic.level() {
+                crate::parser::DiagnosticLevel::Warning => ws.push(d),
+                crate::parser::DiagnosticLevel::Error => es.push(d),
+            }
+        }
+        (ws, es)
+    }
+
+    pub fn print_diagnostics(&self) {
+        let (ws, es) = self.get_warnings_and_errors();
+        for w in ws {
+            println!("\n{}", w.to_string());
+        }
+        for e in es {
+            println!("\n{}", e.to_string());
         }
     }
 }
