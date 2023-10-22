@@ -398,6 +398,7 @@ impl Parser {
         }
     }
 
+    /// Parse source text to `Log`
     pub fn parse(&mut self, source: SourceText) -> Log {
         let mut info = "".to_string();
         loop {
@@ -409,7 +410,7 @@ impl Parser {
                         info += "(";
                     }
                 }
-                TokenKind::Path(p) => panic!("Log should not start with `path`: {p}"),
+                TokenKind::Path(p) => info += p.to_string().as_str(),
                 TokenKind::EOF => todo!(),
                 kind => info += kind.to_string().as_str(),
             }
